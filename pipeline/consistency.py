@@ -36,28 +36,57 @@ def part_masks(passes, view, size, tolerance=40):
     return out
 
 
+def reference(passes, view, colorway, size):
+    """The studio render of this view, on the same grey the generator starts from."""
+    ref = Image.open(os.path.join(passes, view, f'beauty_{colorway}.png')).convert('RGBA')
+    bg = Image.new('RGBA', ref.size, (200, 200, 198, 255))
+    bg.alpha_composite(ref)
+    return bg.convert('RGB').resize(size)
+
+
 def targets(passes, view, colorway, spec, size, min_share=0.002):
     """The colour each part should have: from the spec where it says, from the studio reference otherwise.
     Parts that are replaced exactly later (a screen, a logo) are left alone, and specks too small to judge are skipped."""
-    ref = Image.open(os.path.join(passes, view, f'beauty_{colorway}.png')).convert('RGB').resize(size)
-    r = lab(ref)
+    r = lab(reference(passes, view, colorway, size))
     exact = set(spec.get('exact_materials', []))
     out = {}
     for name, mask in part_masks(passes, view, size).items():
         if name in exact or mask.sum() < min_share * size[0] * size[1]:
             continue
         props = spec.get('colorways', {}).get(colorway, {}).get(name, {})
-        out[name] = (spec_lab(props['color']) if 'color' in props else np.median(r[mask], 0), mask)
+        target = spec_lab(props['color']) if 'color' in props else np.median(r[mask], 0)
+        out[name] = (np.array([np.median(r[mask][..., 0]), target[1], target[2]]), mask)  # lightness from the render
     return out
 
 
-def enforce(img, passes, view, colorway, spec, strength=0.9, feather=1.2):
-    """Give every part its colour back, keeping the photo's light."""
+def enforce(img, passes, view, colorway, spec, strength=0.9, tone=0.7, feather=1.2, tone_limit=22):
+    """Give every part its colour back, and its tone: the hue and chroma come from the spec, and the part is nudged
+    towards the lightness it has in the render, so a light recess cannot come back as a dark one. The photo keeps
+    its own shading inside each part."""
     g = lab(img)
     for name, (target, mask) in targets(passes, view, colorway, spec, img.size).items():
         soft = np.asarray(Image.fromarray((mask * 255).astype('uint8')).filter(ImageFilter.GaussianBlur(feather))).astype(float) / 255
-        soft = soft[..., None] * strength
-        g[..., 1:] = g[..., 1:] * (1 - soft) + np.array(target[1:]) * soft  # hue and chroma from the target, light from the photo
+        blend = soft[..., None] * strength
+        g[..., 1:] = g[..., 1:] * (1 - blend) + np.array(target[1:]) * blend
+        shift = float(np.clip((target[0] - np.median(g[mask][..., 0])) * tone, -tone_limit, tone_limit))
+        g[..., 0] = np.clip(g[..., 0] + shift * soft, 0, 100)
+    return rgb(g)
+
+
+def keep_detail(img, passes, view, colorway, sigma=8, feather=1.0):
+    """The fine detail of the product comes from the render, the light from the photo.
+    Split both into a blurred base and the detail above it, then keep the photo's base and the render's detail,
+    inside the product only. Speaker holes, printed type, seams and edges stay exactly as the CAD has them."""
+    ref = Image.open(os.path.join(passes, view, f'beauty_{colorway}.png')).convert('RGBA')
+    bg = Image.new('RGBA', ref.size, (200, 200, 198, 255))
+    bg.alpha_composite(ref)
+    ref = bg.convert('RGB').resize(img.size)
+    mask = np.asarray(Image.open(os.path.join(passes, view, 'mask.png')).convert('L').resize(img.size)
+                      .filter(ImageFilter.GaussianBlur(feather))).astype(float) / 255
+    g, r = lab(img), lab(ref)
+    blur = lambda ch: np.asarray(Image.fromarray(np.clip(ch * 2.55, 0, 255).astype('uint8'))
+                                 .filter(ImageFilter.GaussianBlur(sigma))).astype(float) / 2.55
+    g[..., 0] = np.clip(g[..., 0] + (r[..., 0] - blur(r[..., 0])) * mask, 0, 100)
     return rgb(g)
 
 

@@ -75,6 +75,22 @@ Colorways, in the meridian palette: `white`, and `signal-orange` in the brand's 
 (1 body, 2 screen, 3 controls, 4 cartridge, 5 internals) for the product masks later on.
 
 
+## Consistency
+
+Every view is generated on its own, so a model is free to invent a different d-pad each time. Three things stop it,
+and the result is measured:
+
+1. **Hold the geometry.** Depth and normals drive ControlNet hard, and the sampler starts from the studio render, so
+   the shape is the product's, not the model's.
+2. **Colour and tone per part.** The passes stage renders a parts map (one flat colour per material). After
+   generation, each part takes the hue and chroma the spec gives it, and is nudged to the lightness it has in the
+   render, so a light recess cannot come back dark. Inside each part, the photo keeps its own shading.
+3. **Fine detail from the render.** Detail above a blur radius (speaker holes, printed type, seams) comes from the
+   render; the light comes from the photo. The screen and the logo are replaced exactly.
+
+`pipeline/consistency.py --check` then measures how far apart the views are, per part, as delta E. On the LUMEN
+launch run: 2.0 for white, 1.6 for signal orange, against a limit of 6.
+
 ## Brand: meridian
 
 `brands/meridian/` holds the brand as data: palette, fonts (Inter Tight and Space Mono, OFL), logo, copy, scenes

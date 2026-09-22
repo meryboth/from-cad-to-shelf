@@ -81,8 +81,10 @@ def finish(img, passes, view, colorway, spec):
     """Everything that has to be true of the product, applied after generation, in order:
     every part gets its spec colour (consistency), then the protected parts come back (screen, logo, buttons)."""
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    from consistency import enforce
-    return lock_protected(enforce(img, passes, view, colorway, spec), passes, view, colorway)
+    from consistency import enforce, keep_detail
+    img = enforce(img, passes, view, colorway, spec)          # colour of every part, from the spec
+    img = keep_detail(img, passes, view, colorway)            # fine detail, from the render
+    return lock_protected(img, passes, view, colorway)        # screen and logo, exactly
 
 
 def lock_protected(img, passes, view, colorway, light=0.2, feather=1.5):

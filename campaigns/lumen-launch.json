@@ -5,12 +5,57 @@
   "backend": "local-sdxl",
   "scene": "studio-paper",
   "pieces": [
-    {"template": "poster", "format": "portrait", "view": "front", "colorway": "signal-orange", "tagline": "Play it slow."},
-    {"template": "poster", "format": "portrait", "view": "front", "colorway": "white", "tagline": "Made to be played."},
-    {"template": "poster", "format": "story", "view": "front", "colorway": "signal-orange", "tagline": "Made to be played."},
-    {"template": "spread", "format": "landscape", "view": "left", "colorway": "white", "tagline": "Play it slow."},
-    {"template": "spread", "format": "landscape", "view": "right", "colorway": "signal-orange", "tagline": "One screen. Two buttons."},
-    {"template": "specsheet", "format": "sheet", "view": "front", "view2": "right", "colorway": "signal-orange", "tagline": "One screen. Two buttons."},
-    {"template": "specsheet", "format": "sheet", "view": "front", "view2": "right", "colorway": "white", "tagline": "Play it slow."}
-  ]
+    {
+      "template": "poster",
+      "format": "portrait",
+      "view": "front",
+      "colorway": "signal-orange",
+      "tagline": "Play it slow."
+    },
+    {
+      "template": "poster",
+      "format": "portrait",
+      "view": "front",
+      "colorway": "white",
+      "tagline": "Made to be played."
+    },
+    {
+      "template": "poster",
+      "format": "story",
+      "view": "front",
+      "colorway": "signal-orange",
+      "tagline": "Made to be played."
+    },
+    {
+      "template": "spread",
+      "format": "landscape",
+      "view": "left",
+      "colorway": "white",
+      "tagline": "Play it slow."
+    },
+    {
+      "template": "spread",
+      "format": "landscape",
+      "view": "right",
+      "colorway": "signal-orange",
+      "tagline": "One screen. Two buttons."
+    },
+    {
+      "template": "specsheet",
+      "format": "sheet",
+      "view": "front",
+      "view2": "right",
+      "colorway": "signal-orange",
+      "tagline": "One screen. Two buttons."
+    },
+    {
+      "template": "specsheet",
+      "format": "sheet",
+      "view": "front",
+      "view2": "right",
+      "colorway": "white",
+      "tagline": "Play it slow."
+    }
+  ],
+  "seed": 11
 }

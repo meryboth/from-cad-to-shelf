@@ -1,11 +1,19 @@
 {
   "studio-paper": {
     "label": "Paper studio",
-    "prompt": "on a seamless warm light grey paper backdrop, soft even studio light from the upper left, a gentle contact shadow, minimal technical catalogue look"
+    "prompt": "on a seamless warm light grey paper backdrop, soft even studio light from the upper left, a gentle contact shadow, minimal technical catalogue look",
+    "depth": 0.95,
+    "depth_end": 0.95,
+    "normal": 0.6,
+    "denoise": 0.62
   },
   "concrete-desk": {
     "label": "Concrete desk",
-    "prompt": "on a pale concrete desk in a quiet design studio, soft daylight from a large window, a steel ruler and a notebook softly out of focus, calm and precise"
+    "prompt": "on a pale concrete desk in a quiet design studio, soft daylight from a large window, a steel ruler and a notebook softly out of focus, calm and precise",
+    "depth": 0.95,
+    "depth_end": 0.95,
+    "normal": 0.6,
+    "denoise": 0.62
   },
   "held": {
     "label": "Held in two hands",

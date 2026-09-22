@@ -49,7 +49,8 @@ qa_path = os.path.join(ROOT, 'runs', pid, 'qa.json')
 qa = json.load(open(qa_path)) if os.path.exists(qa_path) else {}
 chosen = {}
 for v, cw in needed:
-    for seed in (7, 8, 9):
+    base = int(plan.get('seed', 7))
+    for seed in (base, base + 1, base + 2):
         out = os.path.join(gen_dir, f'{v}_{scene}_{cw}_s{seed}.png')
         if not os.path.exists(os.path.join(ROOT, out)) or '--force' in args:
             step(f'generate {v} {cw} seed {seed}', [PY, 'pipeline/generate.py', product, brand, passes, '--backend', backend,
