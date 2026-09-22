@@ -11,7 +11,7 @@ STAGES = [
     ('1', 'Passes', 'Depth, normals, masks and a studio reference per view and colorway, from any product.'),
     ('2', 'Plan', 'A campaign file lists the pieces: template, format, view, colorway, scene. Jev will propose it later.'),
     ('3', 'Generate', 'A ComfyUI graph turns the passes and the plan into photoreal images.'),
-    ('3b', 'Consistency', 'Every part takes its spec colour in every view, keeping the photo's light. Measured across views.'),
+    ('3b', 'Consistency', "Every part takes its spec colour in every view, keeping the light of the photo. Measured across views."),
     ('4', 'Layout', 'The brand on top: real type, colours and logo, per template and format.'),
     ('5', 'Route', 'Colour and parts checked per photo: publish, review, or regenerate with a new seed. Jev later.'),
     ('6', 'Copy', 'Type and copy from the brand file and the product facts, never generated.'),
