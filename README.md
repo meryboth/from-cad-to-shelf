@@ -36,6 +36,10 @@ Textured materials work too: a colorway tints the texture instead of replacing i
 
 `py tools/sheet.py runs/<product>/passes docs/img/<product>-passes.jpg` draws a contact sheet of a run.
 
+`py tools/report.py` writes `runs/index.html`, a local report of everything produced so far: each product's input
+(a 3D viewer of the GLB, its spec and colorways) and every pass, per view and colorway. Serve the repo root with
+`py -m http.server 5190` and open http://localhost:5190/runs/.
+
 ## Two products, one pipeline
 
 The same code, only the product folder changes. Rows are views; columns are the beauty per colorway, depth, normals,
