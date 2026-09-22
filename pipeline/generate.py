@@ -76,6 +76,19 @@ def describe(spec, colorway):
     return f"{spec.get('category', 'product')} called {spec['name']}, {colorway.replace('-', ' ')} colorway"
 
 
+def lock_protected(img, passes, view, colorway, feather=1.5):
+    """Put the protected parts (screen, buttons, logo...) back exactly as the reference has them.
+    Only for backends that keep the camera: the ControlNet graph does, pixel for pixel."""
+    from PIL import ImageFilter
+    d = os.path.join(passes, view)
+    mask_path = os.path.join(d, 'mask_protected.png')
+    if not os.path.exists(mask_path):
+        return img
+    ref = on_grey(os.path.join(d, f'beauty_{colorway}.png')).resize(img.size, Image.LANCZOS)
+    mask = Image.open(mask_path).convert('L').resize(img.size, Image.LANCZOS).filter(ImageFilter.GaussianBlur(feather))
+    return Image.composite(ref, img, mask)
+
+
 # ---------- backends ----------
 def local_sdxl(passes, view, colorway, scene, spec, seed):
     d = os.path.join(passes, view)
@@ -149,10 +162,15 @@ if __name__ == '__main__':
     img, prompt = local_sdxl(passes, view, colorway, scene, spec, seed) if backend == 'local-sdxl' else \
         gemini(backend, passes, view, colorway, scene, spec, seed)
     seconds = round(time.time() - t0, 1)
+    raw = img
+    if backend == 'local-sdxl' and '--no-lock' not in args:
+        img = lock_protected(img, passes, view, colorway)
     out = os.path.join(os.path.dirname(os.path.abspath(passes)), 'generate', backend)
     os.makedirs(out, exist_ok=True)
     name = f'{view}_{scene_id}_{colorway}_s{seed}'
     img.save(os.path.join(out, name + '.png'))
+    if img is not raw:
+        raw.save(os.path.join(out, name + '_raw.png'))  # before the lock, to compare
     record = {'backend': backend, 'view': view, 'colorway': colorway, 'scene': scene_id, 'seed': seed, 'seconds': seconds,
               'usd': PRICES[backend], 'prompt': prompt, 'file': f'{backend}/{name}.png', 'at': time.strftime('%Y-%m-%d %H:%M:%S')}
     with open(os.path.join(os.path.dirname(out), 'ledger.jsonl'), 'a', encoding='utf-8') as f:
