@@ -4,7 +4,7 @@
 #
 # Usage: py pipeline/layout.py <brand dir> <product dir> <out dir> --template poster|spread|specsheet --format F
 #          --image <product image> [--mask <mask.png>] [--image2 <second view>] [--mask2 <mask.png>]
-#          [--colorway C] [--tagline T] [--name N]
+#          [--colorway C] [--tagline T] [--copy runs/<product>/copy.json] [--name N]
 #   an image is an RGBA cut-out (a beauty pass), or a generated photo plus the mask of the same camera
 import datetime
 import json
@@ -204,9 +204,10 @@ def poster(brand, spec, product, W, H, ctx):
     paragraph(d, (m, y1 + 5 * u), brand.copy.get('intro', ''), brand.font('text', 1.55 * u), ink, 38 * u)
     col = 58 * u
     text(d, (col, y1), spec['name'].upper(), mono_b, ink)
-    text(d, (col, y1 + 2.1 * u), ctx['tagline'], mono, ink)
-    text(d, (col + 20 * u, y1), 'COLORWAY', mono_b, ink)
-    text(d, (col + 20 * u, y1 + 2.1 * u), ctx['colorway'].replace('-', ' ').upper(), mono, ink)
+    for i, line in enumerate(wrap(d, ctx['tagline'], mono, 18 * u)[:2]):  # the tagline can run to two lines
+        text(d, (col, y1 + 2.1 * u + i * 2.0 * u), line, mono, ink)
+    text(d, (col + 19.5 * u, y1), 'COLORWAY', mono_b, ink)
+    text(d, (col + 19.5 * u, y1 + 2.1 * u), ctx['colorway'].replace('-', ' ').upper(), mono, ink)
     d.rectangle([col, y1 + 7 * u, col + 25 * u, y1 + 8.4 * u], fill=ink)
     logo(img, brand, col, H - m - 3.4 * u, 3.4 * u, ink)
     return img
@@ -311,6 +312,11 @@ if __name__ == '__main__':
     template, fmt = opt('--template', 'poster'), opt('--format', 'portrait')
     W, H = FORMATS[fmt]
     ctx = {'tagline': opt('--tagline', brand.copy['taglines'][0]), 'colorway': opt('--colorway', next(iter(spec['colorways'])))}
+    if opt('--copy'):  # words built from this product's own facts
+        words = json.load(open(opt('--copy'), encoding='utf-8'))
+        brand.copy = {**brand.copy, 'intro': words['intro'], 'taglines': words['taglines']}
+        if '--tagline' not in args:
+            ctx['tagline'] = words['taglines'][0]
     if opt('--image2'):
         ctx['product2'] = load_product(opt('--image2'), opt('--mask2'))
     piece = TEMPLATES[template](brand, spec, load_product(opt('--image'), opt('--mask')), W, H, ctx)

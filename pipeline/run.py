@@ -76,13 +76,19 @@ for cw in sorted({cw for _, cw in needed}):
     print(f"   {cons[cw]['verdict']}  worst drift between views: {cons[cw]['worst_between_views']}")
 json.dump(cons, open(os.path.join(ROOT, 'runs', pid, 'consistency.json'), 'w'), indent=2)
 
+# 4 · copy: the words of the pieces, from this product's facts
+copy_path = os.path.join('runs', pid, 'copy.json')
+step('copy', [PY, 'pipeline/copy.py', product, brand, '--seed', str(plan.get('seed', 7)), '--out', copy_path])
+words = json.load(open(os.path.join(ROOT, copy_path), encoding='utf-8'))
+
 # 4 · layout: each piece on the generated photo, cut with the mask of the camera it came from
 layout_dir = os.path.join('runs', pid, 'layout', os.path.basename(plan.get('slug', args[0]))[:-5])
-for p in plan['pieces']:
+for i, p in enumerate(plan['pieces']):
     img = lambda v: chosen[(v, p['colorway'])]
     cmd = [PY, 'pipeline/layout.py', brand, product, layout_dir, '--template', p['template'], '--format', p['format'],
            '--image', img(p['view']), '--mask', os.path.join(passes, p['view'], 'mask.png'),
-           '--colorway', p['colorway'], '--tagline', p['tagline'],
+           '--colorway', p['colorway'], '--copy', copy_path,
+           '--tagline', p.get('tagline') or words['taglines'][i % len(words['taglines'])],
            '--name', f"{p['template']}-{p['format']}-{p['colorway']}"]
     if p.get('view2'):
         cmd += ['--image2', img(p['view2']), '--mask2', os.path.join(passes, p['view2'], 'mask.png')]

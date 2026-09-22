@@ -10,52 +10,45 @@
       "template": "poster",
       "format": "portrait",
       "view": "front",
-      "colorway": "white",
-      "tagline": "Play it slow."
+      "colorway": "white"
     },
     {
       "template": "poster",
       "format": "portrait",
       "view": "front",
-      "colorway": "signal-orange",
-      "tagline": "Made to be played."
+      "colorway": "signal-orange"
     },
     {
       "template": "poster",
       "format": "story",
       "view": "front",
-      "colorway": "white",
-      "tagline": "One screen. Two buttons."
+      "colorway": "white"
     },
     {
       "template": "spread",
       "format": "landscape",
       "view": "left",
-      "colorway": "white",
-      "tagline": "Play it slow."
+      "colorway": "white"
     },
     {
       "template": "spread",
       "format": "landscape",
       "view": "right",
-      "colorway": "signal-orange",
-      "tagline": "Made to be played."
+      "colorway": "signal-orange"
     },
     {
       "template": "specsheet",
       "format": "sheet",
       "view": "front",
       "view2": "right",
-      "colorway": "white",
-      "tagline": "Play it slow."
+      "colorway": "white"
     },
     {
       "template": "specsheet",
       "format": "sheet",
       "view": "front",
       "view2": "right",
-      "colorway": "signal-orange",
-      "tagline": "Made to be played."
+      "colorway": "signal-orange"
     }
   ]
 }
