@@ -54,7 +54,10 @@ for v, cw in needed:
         if not os.path.exists(os.path.join(ROOT, out)) or '--force' in args:
             step(f'generate {v} {cw} seed {seed}', [PY, 'pipeline/generate.py', product, brand, passes, '--backend', backend,
                                                    '--view', v, '--scene', scene, '--colorway', cw, '--seed', str(seed)] + extra)
-        verdict = json.loads(step(f'qa {v} {cw} seed {seed}', [PY, 'pipeline/qa.py', passes, out, cw, product]))
+        # judge what the model produced, before the consistency stage corrects it: that is where drift shows
+        raw = out.replace('.png', '_raw.png')
+        judged = raw if os.path.exists(os.path.join(ROOT, raw)) else out
+        verdict = json.loads(step(f'qa {v} {cw} seed {seed}', [PY, 'pipeline/qa.py', passes, judged, cw, product]))
         verdict['seed'] = seed
         qa[out.replace(os.sep, '/')] = verdict
         chosen[(v, cw)] = out
