@@ -1,0 +1,10 @@
+{
+  "studio-paper": {
+    "label": "Paper studio",
+    "prompt": "on a seamless warm light grey paper backdrop, soft even studio light from the upper left, a gentle contact shadow, minimal technical catalogue look"
+  },
+  "concrete-desk": {
+    "label": "Concrete desk",
+    "prompt": "on a pale concrete desk in a quiet design studio, soft daylight from a large window, a steel ruler and a notebook softly out of focus, calm and precise"
+  }
+}

@@ -1,5 +1,5 @@
 # Stage 1 - passes. Any product in, the control images every later stage needs, out.
-# Usage: blender -b -P pipeline/passes.py -- <product dir> <out dir> [--quick]
+# Usage: blender -b -P pipeline/passes.py -- <product dir> <out dir> [--quick] [--view V] [--format square|portrait|story]
 #   <product dir> holds product.glb and product.json (see products/README.md)
 # Nothing here knows what the product is: scale, framing and colours all come from the model and its spec.
 import json
@@ -18,6 +18,11 @@ spec = json.load(open(os.path.join(PRODUCT, 'product.json'), encoding='utf-8'))
 os.makedirs(OUT, exist_ok=True)
 
 RES = spec.get('passes', {}).get('resolution', 1024)
+# a piece format frames the product for its layout: its size (SDXL-friendly), and the share of the frame kept free at the
+# top for the headline. Without --format the frame is square and centred.
+FORMATS = {'square': (1024, 1024, 0.33), 'portrait': (896, 1120, 0.33), 'story': (768, 1344, 0.30)}
+FMT = args[args.index('--format') + 1] if '--format' in args else None
+W_PX, H_PX, HEADROOM = FORMATS[FMT] if FMT else (RES, RES, 0.0)
 # where the cameras sit, in degrees: azimuth from the front (positive turns to the product's right) and elevation
 VIEWS = spec.get('passes', {}).get('views', {
     'front': [0, 4], 'left': [-35, 14], 'right': [35, 14], 'high': [-20, 42],
@@ -197,7 +202,7 @@ def use_engine(engine):
 
 
 use_engine(EEVEE)
-sc.render.resolution_x = sc.render.resolution_y = RES
+sc.render.resolution_x, sc.render.resolution_y = W_PX, H_PX
 sc.render.image_settings.file_format = 'PNG'
 world = bpy.data.worlds.new('world')
 world.use_nodes = True
@@ -217,7 +222,11 @@ cam = bpy.data.objects.new('camera', bpy.data.cameras.new('camera'))
 sc.collection.objects.link(cam)
 sc.camera = cam
 cam.data.lens = LENS
-half = math.atan(cam.data.sensor_width / 2 / LENS)
+half = math.atan(cam.data.sensor_width / 2 / LENS)  # along the longer side of the frame
+tan_x = math.tan(half) * W_PX / max(W_PX, H_PX)
+tan_y = math.tan(half) * H_PX / max(W_PX, H_PX)
+# the product fills the frame below the headroom; lens shift slides that window down without tilting the camera
+cam.data.shift_y = HEADROOM / 2 * H_PX / max(W_PX, H_PX)
 FILL = spec.get('passes', {}).get('fill', 0.82)  # how much of the frame the product takes
 corners = [o.matrix_world @ Vector(c) for o in meshes for c in o.bound_box]
 dist = radius / math.sin(half)  # the lights keep this safe distance; each view gets its own framing
@@ -232,7 +241,7 @@ def frame(direction):
     need = 0.0
     for p in corners:
         v = rot @ (p - center)  # camera axes: x right, y up, -z forward
-        need = max(need, v.z + max(abs(v.x), abs(v.y)) / (math.tan(half) * FILL))
+        need = max(need, v.z + abs(v.x) / (tan_x * FILL), v.z + abs(v.y) / (tan_y * (1 - HEADROOM) * FILL))
     cam.location = center + direction * need
     return need
 
@@ -267,7 +276,7 @@ def render(path, transparent=False, view='Standard'):
     bpy.ops.render.render(write_still=True)
 
 
-manifest = {'product': spec.get('name'), 'resolution': RES, 'lens_mm': LENS, 'center': list(center), 'radius': radius,
+manifest = {'product': spec.get('name'), 'format': FMT, 'size_px': [W_PX, H_PX], 'headroom': HEADROOM, 'resolution': RES, 'lens_mm': LENS, 'center': list(center), 'radius': radius,
             'size_m': list(hi - lo), 'views': {}, 'colorways': list(spec['colorways'])}
 colorways = list(spec['colorways'])[:1] if QUICK else list(spec['colorways'])
 for view, (az, el) in VIEWS.items():

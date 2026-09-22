@@ -1,0 +1,34 @@
+{
+  "name": "meridian",
+  "fictional": true,
+  "tone": "Precise, calm, technical. A Swiss grid, few words, exact numbers.",
+  "colors": {
+    "paper": "#EDEBE8",
+    "stone": "#E0DAD5",
+    "ink": "#424249",
+    "black": "#111111",
+    "signal": "#FF5E2C",
+    "white": "#FAFAF8"
+  },
+  "fonts": {
+    "display": ["fonts/InterTight.ttf#Bold"],
+    "medium": ["fonts/InterTight.ttf#Medium"],
+    "text": ["fonts/InterTight.ttf#Regular"],
+    "mono": ["fonts/SpaceMono-Regular.ttf"],
+    "mono_bold": ["fonts/SpaceMono-Bold.ttf"]
+  },
+  "logo": {"text": "meridian\ninstruments", "mark": "meridian"},
+  "copy": {
+    "taglines": ["Play it slow.", "Made to be played.", "One screen. Two buttons."],
+    "intro": "A handheld with a backlit screen, a D-pad and a cartridge slot on the back. Made for the games you remember, and the ones you have not played yet.",
+    "place": "Buenos Aires",
+    "coords": ["34°36′S", "58°22′W"],
+    "series": "Field Series",
+    "nav": ["handheld", "colorways", "specs"]
+  },
+  "templates": {
+    "poster": {"background": "paper", "ink": "black", "accent": "signal"},
+    "spread": {"background": "paper", "ink": "black", "accent": "signal"},
+    "specsheet": {"background": "stone", "card": "white", "ink": "black", "accent": "signal"}
+  }
+}

@@ -59,7 +59,7 @@ def layouts(pid):
     if not files:
         return ''
     figs = ''.join(f'<figure><img class="piece" loading="lazy" src="{pid}/layout/{f}" alt="{e(f[:-4])}"><figcaption>{e(f[:-4].replace('/', ' · '))}</figcaption></figure>' for f in files)
-    return f'<h3>Stage 4 · Layout <small>prototype: the product image is still the studio reference, until ComfyUI renders it</small></h3><div class="pieces">{figs}</div>'
+    return f'<h3>Stage 4 · Layout <small>meridian brand: poster, spread and spec sheet, from the studio references</small></h3><div class="pieces">{figs}</div>'
 
 
 def product_section(pid):

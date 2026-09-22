@@ -1,16 +1,21 @@
-# Stage - Layout. A product image + a brand -> finished campaign pieces, with real type, colours and logo.
+# Stage - Layout. Product images + a brand -> finished campaign pieces, with real type, colours and logo.
 # The type is set here, never by the image model: generated text is unreliable, and brand type has to be exact.
-# Usage: py pipeline/layout.py <brand dir> <product dir> <product image.png> <out dir> [--template split|centered] [--format ...]
-#   the product image is an RGBA cut-out: a beauty pass for now, a ComfyUI render later
+# Every size is a fraction of the canvas, so one template serves every format.
+#
+# Usage: py pipeline/layout.py <brand dir> <product dir> <out dir> --template poster|spread|specsheet --format F
+#          --image <product image> [--mask <mask.png>] [--image2 <second view>] [--mask2 <mask.png>]
+#          [--colorway C] [--tagline T] [--name N]
+#   an image is an RGBA cut-out (a beauty pass), or a generated photo plus the mask of the same camera
+import datetime
 import json
 import math
 import os
 import sys
 
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
-FORMATS = {'landscape': (1200, 628), 'square': (1080, 1080), 'portrait': (1080, 1350), 'story': (1080, 1920)}
-DEFAULT_TEMPLATE = {'landscape': 'split', 'square': 'centered', 'portrait': 'centered', 'story': 'centered'}
+FORMATS = {'landscape': (1200, 628), 'square': (1080, 1080), 'portrait': (1080, 1350), 'story': (1080, 1920),
+           'sheet': (1200, 900)}
 
 
 def hex_rgb(h):
@@ -23,69 +28,97 @@ class Brand:
         self.dir = folder
         self.spec = json.load(open(os.path.join(folder, 'brand.json'), encoding='utf-8'))
         self.colors = {k: hex_rgb(v) for k, v in self.spec['colors'].items()}
+        self.copy = self.spec.get('copy', {})
+        self._fonts = {}
 
     def font(self, role, size):
-        for path in self.spec['fonts'][role]:
+        size = max(int(size), 6)
+        key = (role, size)
+        if key not in self._fonts:
+            self._fonts[key] = self._load(role, size)
+        return self._fonts[key]
+
+    def _load(self, role, size):
+        for entry in self.spec['fonts'].get(role) or self.spec['fonts']['text']:
+            path, _, variation = entry.partition('#')  # "file.ttf#Bold" picks a weight of a variable font
             full = path if os.path.isabs(path) else os.path.join(self.dir, path)
-            for candidate in (full, path):
-                try:
-                    return ImageFont.truetype(candidate, size)
-                except OSError:
-                    continue
+            try:
+                f = ImageFont.truetype(full, size)
+            except OSError:
+                continue
+            if variation:
+                f.set_variation_by_name(variation)
+            return f
         return ImageFont.load_default(size)
 
     def color(self, name):
         return self.colors.get(name) or hex_rgb(name)
 
 
-def cutout(path):
-    """The product alone, trimmed. When a passes mask sits next to the image, it cuts the product clean:
-    the contact shadow belongs to the studio floor, not to a layout with its own background."""
+# ---------- images ----------
+def load_product(path, mask=None):
+    """The product alone, trimmed. A studio cut-out carries its own alpha; a generated photo is cut with the mask
+    of the camera it was generated from (the ControlNet graph keeps the camera, so the mask fits pixel for pixel)."""
     im = Image.open(path).convert('RGBA')
-    mask = os.path.join(os.path.dirname(path), 'mask.png')
-    if os.path.exists(mask):
-        m = Image.open(mask).convert('L').resize(im.size).filter(ImageFilter.GaussianBlur(0.6))
-        im.putalpha(m)
-    box = im.getchannel('A').point(lambda a: 255 if a > 8 else 0).getbbox()
+    mask = mask or os.path.join(os.path.dirname(path), 'mask.png')
+    if mask and os.path.exists(mask):
+        m = Image.open(mask).convert('L').resize(im.size, Image.LANCZOS).filter(ImageFilter.GaussianBlur(0.8))
+        im.putalpha(ImageChops.multiply(m, im.getchannel('A')))
+    box = im.getchannel('A').point(lambda a: 255 if a > 10 else 0).getbbox()
     return im.crop(box)
 
 
-def text_size(draw, text, font):
-    l, t, r, b = draw.textbbox((0, 0), text, font=font)
+def fit(img, max_w, max_h):
+    k = min(max_w / img.width, max_h / img.height)
+    return img.resize((max(1, int(img.width * k)), max(1, int(img.height * k))), Image.LANCZOS)
+
+
+def place(canvas, product, cx, cy, shadow=True):
+    """Paste centred on (cx, cy), with a soft contact shadow under it, so it sits on the paper instead of floating."""
+    x, y = int(cx - product.width / 2), int(cy - product.height / 2)
+    if shadow:  # drawn on a padded canvas, so the blur fades out instead of stopping at a straight edge
+        pad = int(product.width * 0.15)
+        sh = Image.new('L', (product.width + 2 * pad, max(4, product.height // 14) + 2 * pad), 0)
+        ImageDraw.Draw(sh).ellipse([pad + product.width * 0.06, pad, pad + product.width * 0.94, sh.height - pad], fill=80)
+        sh = sh.filter(ImageFilter.GaussianBlur(product.width * 0.035))
+        canvas.paste(Image.new('RGB', sh.size, (0, 0, 0)), (x - pad, y + product.height - sh.height // 2), sh)
+    canvas.paste(product, (x, y), product)
+    return x, y
+
+
+def multiply_block(canvas, box, color, opacity=0.92):
+    """A flat colour block that multiplies with what is under it, like ink over a print."""
+    x0, y0, x1, y1 = (int(v) for v in box)
+    region = canvas.crop((x0, y0, x1, y1))
+    inked = ImageChops.multiply(region, Image.new('RGB', region.size, color))
+    canvas.paste(Image.blend(region, inked, opacity), (x0, y0))
+
+
+# ---------- type ----------
+def text_box(d, s, font):
+    l, t, r, b = d.textbbox((0, 0), s, font=font)
     return r - l, b - t, l, t
 
 
-def draw_logo(img, brand, x, y, height, color, anchor='left'):
-    """The wordmark with its half-sun, `height` tall, placed by its left or centre."""
-    d = ImageDraw.Draw(img)
-    f = brand.font('display', int(height * 1.25))
-    w, h, l, t = text_size(d, brand.spec['logo']['text'], f)
-    mark = height * 1.1
-    total = mark + height * 0.35 + w
-    x0 = x - total / 2 if anchor == 'center' else x
-    # half sun: a semicircle sitting on a line, the "after glow" of a sunset
-    cy = y + height * 0.78
-    d.pieslice([x0, cy - mark / 2, x0 + mark, cy + mark / 2], 180, 360, fill=color)
-    d.rectangle([x0 - mark * 0.08, cy + height * 0.08, x0 + mark * 1.08, cy + height * 0.16], fill=color)
-    d.text((x0 + mark + height * 0.35 - l, y - t + (height - h) * 0.5), brand.spec['logo']['text'], font=f, fill=color)
+def text(d, xy, s, font, fill, anchor='la'):
+    """Draw by the ink box, not the font box: 'la' left-top, 'ra' right-top, 'ma' centre-top, 'lb' left-bottom."""
+    w, h, l, t = text_box(d, s, font)
+    x, y = xy
+    if anchor[0] == 'r':
+        x -= w
+    elif anchor[0] == 'm':
+        x -= w / 2
+    if anchor[1] == 'b':
+        y -= h
+    d.text((x - l, y - t), s, font=font, fill=fill)
+    return w, h
 
 
-def fit_font(draw, brand, role, text, max_w, max_h):
-    size = int(max_h)
-    while size > 8:
-        f = brand.font(role, size)
-        w, h, _, _ = text_size(draw, text, f)
-        if w <= max_w and h <= max_h:
-            return f
-        size = int(size * 0.94)
-    return brand.font(role, 8)
-
-
-def wrap(draw, text, font, max_w):
+def wrap(d, s, font, max_w):
     lines, cur = [], ''
-    for word in text.split():
+    for word in s.split():
         trial = (cur + ' ' + word).strip()
-        if text_size(draw, trial, font)[0] <= max_w or not cur:
+        if text_box(d, trial, font)[0] <= max_w or not cur:
             cur = trial
         else:
             lines.append(cur)
@@ -93,133 +126,194 @@ def wrap(draw, text, font, max_w):
     return lines + ([cur] if cur else [])
 
 
-def split(brand, name, tagline, product, W, H):
-    """Title big on the left, tagline top right, logo bottom left, the product bleeding off the bottom right."""
-    t = brand.spec['templates']['split']
+def paragraph(d, xy, s, font, fill, max_w, leading=1.45):
+    x, y = xy
+    lines = wrap(d, s, font, max_w)
+    for i, line in enumerate(lines):
+        d.text((x, y + i * font.size * leading), line, font=font, fill=fill)
+    return len(lines) * font.size * leading
+
+
+def fit_font(d, brand, role, s, max_w, max_h):
+    size = int(max_h * 1.4)
+    while size > 6:
+        f = brand.font(role, size)
+        w, h, _, _ = text_box(d, s, f)
+        if w <= max_w and h <= max_h:
+            return f
+        size = int(size * 0.95)
+    return brand.font(role, 6)
+
+
+def logo(canvas, brand, x, y, size, color):
+    """The mark (a circle cut by its meridian) and the wordmark, `size` tall, from its top-left corner."""
+    d = ImageDraw.Draw(canvas)
+    r = size / 2
+    lw = max(1, int(size * 0.09))
+    d.ellipse([x, y, x + size, y + size], outline=color, width=lw)
+    d.line([x + r, y - size * 0.12, x + r, y + size * 1.12], fill=color, width=lw)
+    f = brand.font('medium', size * 0.44)
+    for i, line in enumerate(brand.spec['logo']['text'].split('\n')):
+        d.text((x + size * 1.35, y + i * size * 0.52), line, font=f, fill=color)
+
+
+NUMBERS = {'24': 'twenty-four', '25': 'twenty-five', '26': 'twenty-six', '27': 'twenty-seven'}
+
+
+# ---------- templates ----------
+def poster(brand, spec, product, W, H, ctx):
+    """A Swiss-grid poster: the year split across the top, a bar and a caption, the product with a signal block
+    across it, and a grid of small facts at the bottom."""
+    t = brand.spec['templates']['poster']
+    ink, accent = brand.color(t['ink']), brand.color(t['accent'])
     img = Image.new('RGB', (W, H), brand.color(t['background']))
     d = ImageDraw.Draw(img)
-    m = int(min(W, H) * 0.075)
-    f = fit_font(d, brand, 'display', name, W * 0.52, H * 0.34)
-    w, h, l, top = text_size(d, name, f)
-    d.text((m - l, m - top), name, font=f, fill=brand.color(t['title']))
-    ft = brand.font('text', int(H * 0.068))
-    for i, line in enumerate(wrap(d, tagline, ft, W * 0.24)):
-        lw, lh, ll, lt = text_size(d, line, ft)
-        d.text((W - m - lw - ll, m - lt + i * H * 0.085), line, font=ft, fill=brand.color(t['tagline']))
-    draw_logo(img, brand, m, H - m - H * 0.06, H * 0.06, brand.color(t['logo']))
-    scale = H * 1.05 / product.height
-    p = product.resize((int(product.width * scale), int(product.height * scale)), Image.LANCZOS)
-    img.paste(p, (int(W * 0.66 - p.width / 2), int(H * 0.30)), p)
+    u = W / 100  # one grid unit
+    m = 4.5 * u
+    year = str(spec.get('year', datetime.date.today().year))
+    big = brand.font('display', 17 * u)
+    small = brand.font('text', 1.9 * u)
+    mono, mono_b = brand.font('mono', 1.45 * u), brand.font('mono_bold', 1.45 * u)
+    # top row: 20 twenty ......... twenty-six 26
+    lw, lh = text(d, (m, m), year[:2], big, ink)
+    text(d, (m + lw + 1.2 * u, m + 0.2 * u), 'twenty', small, ink)
+    rw, _ = text(d, (W - m, m), year[2:], big, ink, 'ra')
+    text(d, (W - m - rw - 1.2 * u, m + 0.2 * u), NUMBERS.get(year[2:], year[2:]), small, ink, 'ra')
+    bar_y = m + lh * 0.62
+    d.rectangle([33 * u, bar_y, 58 * u, bar_y + 1.9 * u], fill=ink)
+    cap_y = bar_y + 3.2 * u
+    text(d, (33 * u, cap_y), spec['name'].upper(), mono_b, ink)
+    text(d, (33 * u, cap_y + 2.1 * u), f"{spec.get('code', '')} · {brand.copy.get('series', '')}", mono, ink)
+    right = W - m - rw - 1.2 * u
+    text(d, (right, cap_y), brand.copy.get('place', '').upper(), mono_b, ink, 'ra')
+    text(d, (right, cap_y + 2.1 * u), '  '.join(brand.copy.get('coords', [])), mono, ink, 'ra')
+    # the product, and the signal block across it
+    top = cap_y + 6 * u
+    bottom = H - 30 * u
+    p = fit(product, W * 0.5, (bottom - top) * 0.9)
+    cy = (top + bottom) / 2
+    place(img, p, W / 2, cy)
+    band = (bottom - top) * 0.16
+    multiply_block(img, (0, cy - band * 0.7, W * 0.6, cy + band * 0.3), accent)
+    d = ImageDraw.Draw(img)
+    # bottom grid: a bar, the date and the intro on the left; name, colorway, a bar and the logo on the right
+    y0 = bottom + 2 * u
+    d.rectangle([m, y0, m + 25 * u, y0 + 1.4 * u], fill=ink)
+    y1 = y0 + 6 * u
+    text(d, (m, y1), datetime.date.today().strftime('%d.%m.%Y'), brand.font('text', 3.3 * u), ink)
+    paragraph(d, (m, y1 + 5 * u), brand.copy.get('intro', ''), brand.font('text', 1.55 * u), ink, 38 * u)
+    col = 58 * u
+    text(d, (col, y1), spec['name'].upper(), mono_b, ink)
+    text(d, (col, y1 + 2.1 * u), ctx['tagline'], mono, ink)
+    text(d, (col + 20 * u, y1), 'COLORWAY', mono_b, ink)
+    text(d, (col + 20 * u, y1 + 2.1 * u), ctx['colorway'].replace('-', ' ').upper(), mono, ink)
+    d.rectangle([col, y1 + 7 * u, col + 25 * u, y1 + 8.4 * u], fill=ink)
+    logo(img, brand, col, H - m - 3.4 * u, 3.4 * u, ink)
     return img
 
 
-def centered(brand, name, tagline, product, W, H):
-    """Logo on top, title and tagline centred, a generated-looking backdrop, the product rising from the bottom."""
-    t = brand.spec['templates']['centered']
+def spread(brand, spec, product, W, H, ctx):
+    """A landing-page spread: logo and small navigation on top, an introduction, the name huge at the bottom left,
+    the product large on the right, and a signal band along the bottom."""
+    t = brand.spec['templates']['spread']
+    ink, accent = brand.color(t['ink']), brand.color(t['accent'])
     img = Image.new('RGB', (W, H), brand.color(t['background']))
-    # backdrop: one big soft sphere, the colour field the image model will later paint for real
-    a, b = (brand.color(c) for c in t['backdrop'])
-    r = int(max(W * 0.62, H * 0.5))  # tall formats get a bigger sphere, so the type always sits on colour
-    cx, cy = W // 2, int(H * 0.55)
-    grad = Image.new('RGB', (2 * r, 2 * r))
-    gd = ImageDraw.Draw(grad)
-    for i in range(2 * r):
-        k = i / (2 * r)
-        k = k * k * (3 - 2 * k)
-        gd.line([(0, i), (2 * r, i)], fill=tuple(int(a[j] * (1 - k) + b[j] * k) for j in range(3)))
-    mask = Image.new('L', (2 * r, 2 * r), 0)
-    ImageDraw.Draw(mask).ellipse([0, 0, 2 * r - 1, 2 * r - 1], fill=255)
-    img.paste(grad, (cx - r, cy - r), mask.filter(ImageFilter.GaussianBlur(r * 0.01)))
     d = ImageDraw.Draw(img)
-    m = int(min(W, H) * 0.07)
-    draw_logo(img, brand, W / 2, H * 0.075, H * 0.035 * (1080 / H) ** 0.3 * (H / W) ** 0.2, brand.color(t['logo']), 'center')
-    y = H * 0.15
-    title_h = min(H * 0.16, W * 0.2)
-    chord = 2 * math.sqrt(max(r * r - (cy - y - title_h / 2) ** 2, 0))  # the sphere's width at the title's height
-    f = fit_font(d, brand, 'display', name, min(W - 2 * m, chord * 0.86), title_h)
-    w, h, l, top = text_size(d, name, f)
-    d.text(((W - w) / 2 - l, y - top), name, font=f, fill=brand.color(t['title']))
-    ft = brand.font('text', int(h * 0.36))
-    tw, th, tl, tt = text_size(d, tagline, ft)
-    d.text(((W - tw) / 2 - tl, y + h * 1.25 - tt), tagline, font=ft, fill=brand.color(t['tagline']))
-    scale = W * min(0.5 * (H / W) ** 0.6, 0.72) / product.width  # taller formats show more product
-    p = product.resize((int(product.width * scale), int(product.height * scale)), Image.LANCZOS)
-    img.paste(p, (int((W - p.width) / 2), int(max(y + h * 2.3, H - p.height * 0.86))), p)
+    u = W / 100
+    m = 5 * u
+    logo(img, brand, m, m, 3 * u, ink)
+    nav = brand.font('text', 1.35 * u)
+    x = W - m
+    for item in reversed(brand.copy.get('nav', [])):
+        w, _ = text(d, (x, m + 0.6 * u), '↗', nav, accent, 'ra')
+        w2, _ = text(d, (x - w - 0.6 * u, m + 0.6 * u), item, nav, ink, 'ra')
+        x -= w + w2 + 4 * u
+    for i in range(3):  # thin diagonals behind the product
+        o = i * 2.2 * u
+        d.line([(W - m + o * 0.2, m * 2.4 + o), (W * 0.52 + o, H * 0.62 + o)], fill=brand.color('ink'), width=1)
+    band = H * 0.035
+    d.rectangle([m, H - band - 1.5 * u, W - m, H - 1.5 * u], fill=accent)
+    p = fit(product, W * 0.4, H * 0.8)  # stays below the navigation
+    img.paste(p, (int(W * 0.7 - p.width / 2), int(H - 1.5 * u - band * 0.3 - p.height)), p)
+    d = ImageDraw.Draw(img)
+    y = H * 0.27
+    _, h = text(d, (m, y), f"Introducing {spec['name']}", brand.font('medium', 3.2 * u), ink)
+    ph = paragraph(d, (m, y + h + 2.5 * u), brand.copy.get('intro', ''), brand.font('text', 1.3 * u), ink, 33 * u)
+    ly = y + h + 2.5 * u + ph + 1.8 * u
+    lw, lh = text(d, (m, ly), 'explore →', brand.font('text', 1.8 * u), accent)
+    d.line([m, ly + lh + 0.8 * u, m + lw, ly + lh + 0.8 * u], fill=accent, width=max(1, int(0.15 * u)))
+    f = fit_font(d, brand, 'display', spec['name'], W * 0.5, H * 0.24)
+    text(d, (m - 0.4 * u, H - band - 4.5 * u), spec['name'], f, brand.color('black'), 'lb')
     return img
 
 
-def cover(img, W, H, focus=(0.5, 0.5)):
-    """Scale to fill W x H and crop around `focus` (fractions of the image)."""
-    k = max(W / img.width, H / img.height)
-    im = img.resize((math.ceil(img.width * k), math.ceil(img.height * k)), Image.LANCZOS)
-    x = min(max(int(im.width * focus[0] - W / 2), 0), im.width - W)
-    y = min(max(int(im.height * focus[1] - H / 2), 0), im.height - H)
-    return im.crop((x, y, x + W, y + H))
-
-
-def scrim(img, height, color, strength=0.55):
-    """A soft band of colour from the top edge down, so type reads on any photo."""
-    band = Image.new('L', (1, height))
-    for i in range(height):
-        band.putpixel((0, i), int(255 * strength * (1 - i / height) ** 1.6))
-    over = Image.new('RGB', img.size, color)
-    mask = Image.new('L', img.size, 0)
-    mask.paste(band.resize((img.width, height)), (0, 0))
-    return Image.composite(over, img, mask)
-
-
-def photo(brand, name, tagline, product, W, H):
-    """The generated scene full bleed, the type on a soft scrim at the top: logo, title, tagline."""
-    t = brand.spec['templates'].get('photo', {'scrim': 'ink', 'title': 'cream', 'tagline': 'cream', 'logo': 'cream'})
-    img = scrim(cover(product, W, H, (0.5, 0.6)), int(H * 0.42), brand.color(t['scrim']))
-    d = ImageDraw.Draw(img)
-    m = int(min(W, H) * 0.07)
-    draw_logo(img, brand, W / 2, H * 0.05, min(W, H) * 0.035, brand.color(t['logo']), 'center')
-    f = fit_font(d, brand, 'display', name, W - 2 * m, min(H * 0.13, W * 0.17))
-    w, h, l, top = text_size(d, name, f)
-    y = H * 0.05 + min(W, H) * 0.08
-    d.text(((W - w) / 2 - l, y - top), name, font=f, fill=brand.color(t['title']))
-    ft = brand.font('text', int(h * 0.34))
-    tw, th, tl, tt = text_size(d, tagline, ft)
-    d.text(((W - tw) / 2 - tl, y + h * 1.22 - tt), tagline, font=ft, fill=brand.color(t['tagline']))
-    return img
-
-
-def split_photo(brand, name, tagline, product, W, H):
-    """Type on the brand colour on the left, the generated scene on the right, like a print spread."""
-    t = brand.spec['templates']['split']
+def specsheet(brand, spec, product, W, H, ctx):
+    """A spec sheet on a card: two views of the product, the line-up of colorways with the current one marked,
+    a buy block, and the tagline set in mono as a technical label."""
+    t = brand.spec['templates']['specsheet']
+    ink, accent, card = brand.color(t['ink']), brand.color(t['accent']), brand.color(t['card'])
     img = Image.new('RGB', (W, H), brand.color(t['background']))
-    pw = int(W * 0.5)
-    img.paste(cover(product, pw, H, (0.5, 0.55)), (W - pw, 0))
     d = ImageDraw.Draw(img)
-    m = int(min(W, H) * 0.075)
-    f = fit_font(d, brand, 'display', name, W - pw - 2 * m, H * 0.3)
-    w, h, l, top = text_size(d, name, f)
-    d.text((m - l, m - top), name, font=f, fill=brand.color(t['title']))
-    ft = brand.font('text', int(H * 0.06))
-    for i, line in enumerate(wrap(d, tagline, ft, W - pw - 2 * m)):
-        lw, lh, ll, lt = text_size(d, line, ft)
-        d.text((m - ll, m + h * 1.25 - lt + i * H * 0.08), line, font=ft, fill=brand.color(t['tagline']))
-    draw_logo(img, brand, m, H - m - H * 0.06, H * 0.06, brand.color(t['logo']))
+    u = W / 100
+    m = 4 * u
+    d.rounded_rectangle([m, m, W - m, H - m], radius=1.2 * u, fill=card)
+    split_x, split_y = W * 0.72, H * 0.64
+    line = brand.color('stone')
+    d.line([split_x, m, split_x, H - m], fill=line, width=1)
+    d.line([m, split_y, W - m, split_y], fill=line, width=1)
+    logo(img, brand, m + 3 * u, m + 3 * u, 2.6 * u, ink)
+    views = [product] + ([ctx['product2']] if ctx.get('product2') else [])
+    fitted = [fit(v, (split_x - m) * 0.38, (split_y - m) * 0.7) for v in views]
+    gap = 5 * u
+    total = sum(v.width for v in fitted) + gap * (len(fitted) - 1)
+    x = m + (split_x - m - total) / 2 + 3 * u
+    for v in fitted:
+        img.paste(v, (int(x), int(m + (split_y - m - v.height) / 2 + 2 * u)), v)
+        x += v.width + gap
+    d = ImageDraw.Draw(img)
+    rx = split_x + 2.5 * u
+    rw = W - m - rx - 2.5 * u
+    paragraph(d, (rx, m + 3 * u), f"THE {spec['name'].upper()}. {spec.get('category', '').upper()}.", brand.font('mono', 1.1 * u), ink, rw)
+    row = brand.font('mono', 1.2 * u)
+    y = split_y + 3 * u
+    for cw in list(spec.get('colorways', {}))[:6]:
+        label = cw.replace('-', '_').upper()
+        if cw == ctx['colorway']:
+            d.rectangle([rx - 0.8 * u, y - 0.5 * u, rx + rw + 0.8 * u, y + 2.1 * u], fill=accent)
+            text(d, (rx, y), '>>> ' + label, row, brand.color('white'))
+        else:
+            text(d, (rx, y), label, row, ink)
+        y += 3 * u
+    text(d, (rx, H - m - 4 * u), 'LOAD_MORE', row, accent)
+    bx, by = m + 3 * u, split_y + 4 * u
+    bs = (H - m - split_y) - 8 * u
+    d.rounded_rectangle([bx, by, bx + bs * 0.8, by + bs], radius=1 * u, fill=accent)
+    text(d, (bx + 1.5 * u, by + 1.5 * u), '>>>', brand.font('mono_bold', 1.6 * u), brand.color('white'))
+    text(d, (bx + 1.5 * u, by + bs - 1.5 * u), 'BUY NOW', brand.font('mono_bold', 1.1 * u), brand.color('white'), 'lb')
+    words = ctx['tagline'].upper().rstrip('.').replace('.', '').split()
+    half = math.ceil(len(words) / 2)
+    lines = ['_'.join(words[:half]), '_'.join(words[half:])] if len(words) > 2 else ['_'.join(words)]
+    lf = fit_font(d, brand, 'mono_bold', max(lines, key=len), split_x - bx - bs * 0.8 - 8 * u, 5.2 * u)
+    ty = by + (bs - len(lines) * lf.size * 1.15) / 2
+    for i, s in enumerate(lines):
+        d.text((bx + bs * 0.8 + 5 * u, ty + i * lf.size * 1.15), s, font=lf, fill=brand.color('black'))
     return img
 
 
-TEMPLATES = {'split': split, 'centered': centered, 'photo': photo, 'split-photo': split_photo}
-PHOTO_TEMPLATE = {'landscape': 'split-photo', 'square': 'photo', 'portrait': 'photo', 'story': 'photo'}
+TEMPLATES = {'poster': poster, 'spread': spread, 'specsheet': specsheet}
 
 if __name__ == '__main__':
     args = sys.argv[1:]
     opt = lambda k, d=None: args[args.index(k) + 1] if k in args else d
-    brand_dir, product_dir, image, out = args[:4]
+    brand_dir, product_dir, out = args[:3]
     brand = Brand(brand_dir)
     spec = json.load(open(os.path.join(product_dir, 'product.json'), encoding='utf-8'))
-    fmt = opt('--format', 'landscape')
-    is_cutout = Image.open(image).mode == 'RGBA'  # a studio cut-out, or a generated scene
-    template = opt('--template', (DEFAULT_TEMPLATE if is_cutout else PHOTO_TEMPLATE)[fmt])
-    tagline = opt('--tagline', brand.spec['taglines'][0])
+    template, fmt = opt('--template', 'poster'), opt('--format', 'portrait')
     W, H = FORMATS[fmt]
-    src = cutout(image) if is_cutout else Image.open(image).convert('RGB')
-    piece = TEMPLATES[template](brand, spec['name'], tagline, src, W, H)
+    ctx = {'tagline': opt('--tagline', brand.copy['taglines'][0]), 'colorway': opt('--colorway', next(iter(spec['colorways'])))}
+    if opt('--image2'):
+        ctx['product2'] = load_product(opt('--image2'), opt('--mask2'))
+    piece = TEMPLATES[template](brand, spec, load_product(opt('--image'), opt('--mask')), W, H, ctx)
     os.makedirs(out, exist_ok=True)
     name = opt('--name', f'{template}-{fmt}')
     piece.save(os.path.join(out, f'{name}.png'))

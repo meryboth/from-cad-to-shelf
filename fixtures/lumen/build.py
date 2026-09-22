@@ -319,6 +319,8 @@ def export_product(folder):
         colorways[cw] = mats
     spec = {
         'name': 'LUMEN',
+        'code': 'L-01',
+        'year': '2026',
         'category': 'retro handheld game console',
         'fictional': True,
         'size_mm': [90, 148, 30],
