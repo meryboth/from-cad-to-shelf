@@ -1,30 +1,32 @@
-# A local report of everything the pipeline has produced: py tools/report.py  ->  runs/index.html
+# The run report: one page that tells each campaign end to end, from its two inputs to its pieces.
+#   py tools/report.py   ->  runs/index.html
 # Serve the repo root (py -m http.server 5190) and open http://localhost:5190/runs/
+# Images on the page are cached thumbnails; the full file is fetched only when one is opened.
 import datetime
+import glob
 import html
 import json
 import os
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RUNS = os.path.join(ROOT, 'runs')
+THUMBS = os.path.join(RUNS, '_thumbs')
+e = html.escape
+
 STAGES = [
     ('0', 'Style', 'A moodboard in: palette, light, composition and type are measured, and a brand and a campaign come out.'),
-    ('1', 'Passes', 'Depth, normals, masks and a studio reference per view and colorway, from any product.'),
-    ('2', 'Plan', 'A campaign file lists the pieces: template, format, view, colorway, scene. Jev will propose it later.'),
-    ('3', 'Generate', 'A ComfyUI graph turns the passes and the plan into photoreal images.'),
-    ('3b', 'Consistency', "Every part takes its spec colour in every view, keeping the light of the photo. Measured across views."),
-    ('4', 'Layout', 'The brand on top: real type, colours and logo, per template and format.'),
-    ('5', 'Route', 'Colour and parts checked per photo: publish, review, or regenerate with a new seed. Jev later.'),
-    ('6', 'Copy', 'Type and copy from the brand file and the product facts, never generated.'),
-    ('7', 'Report', 'This page: every input, pass, photo, verdict and piece of every run.'),
+    ('1', 'Passes', 'Depth, normals, masks, a parts map and a studio reference per view and colorway, from any product.'),
+    ('2', 'Plan', 'A campaign file lists the pieces: template or sampled layout, format, view, colorway, scene.'),
+    ('3', 'Generate', 'A ComfyUI graph turns the passes into photoreal images, locally or through a paid model.'),
+    ('3b', 'Consistency', 'Every part takes its spec colour and tone in every view; fine detail comes from the render.'),
+    ('4', 'Route', 'Colour and parts are checked per photo: publish, review, or regenerate with a new seed.'),
+    ('5', 'Compose', 'Layouts are sampled on a measured grid, biased by the references, scored and picked.'),
+    ('6', 'Report', 'This page: every input, photo, verdict and piece, campaign by campaign.'),
 ]
-PASSES = [('depth', 'Depth'), ('normal', 'Normals'), ('mask', 'Mask'), ('mask_protected', 'Protected parts')]
-e = html.escape
-THUMBS = os.path.join(RUNS, '_thumbs')
 
 
 def thumb(path, side=420):
-    """A small JPEG for the page; the full image is fetched only when one is opened. Cached by modification time."""
+    """A small JPEG for the page, cached by modification time."""
     from PIL import Image
     src = path if os.path.isabs(path) else os.path.join(ROOT, path)
     if not os.path.exists(src):
@@ -44,180 +46,166 @@ def thumb(path, side=420):
     return '_thumbs/' + key
 
 
+def rel(path):
+    """A path as the page refers to it: relative to runs/."""
+    return os.path.relpath(os.path.join(ROOT, path), RUNS).replace(os.sep, '/')
 
 
-def rgb(c):
-    return 'rgb(%d,%d,%d)' % tuple(round(max(0, min(1, v)) ** (1 / 2.2) * 255) for v in c)  # linear -> screen
-
-
-BACKENDS = ['local-sdxl', 'nano-banana', 'nano-banana-2', 'nano-banana-pro']
-
-
-def generations(pid):
-    ledger = os.path.join(RUNS, pid, 'generate', 'ledger.jsonl')
-    if not os.path.exists(ledger):
+def img(path, side=420, cls='', caption=None):
+    t = thumb(path, side)
+    if not t:
         return ''
-    recs = [json.loads(l) for l in open(ledger, encoding='utf-8') if l.strip()]
-    latest = {}
-    for r in [r for r in recs if not r.get('format') and not r.get('shot')
-              and os.path.exists(os.path.join(RUNS, pid, 'passes', r['view'], f"beauty_{r['colorway']}.png"))]:
-        latest[(r['view'], r['scene'], r['colorway'], r['backend'])] = r
-    combos = sorted({k[:3] for k in latest})
-    backends = [b for b in BACKENDS if any(k[3] == b for k in latest)]
-    head = '<th>Reference</th>' + ''.join(f'<th>{e(b)}</th>' for b in backends)
-    rows = ''
-    for v, sc, cw in combos:
-        cells = f'<td class="beauty"><img loading="lazy" src="{thumb(f'runs/{pid}/passes/{v}/beauty_{cw}.png')}" data-full="{pid}/passes/{v}/beauty_{cw}.png" alt="reference {e(v)} {e(cw)}"></td>'
-        for b in backends:
-            r = latest.get((v, sc, cw, b))
-            cells += (f'<td class="gen"><img loading="lazy" src="{thumb(f'runs/{pid}/generate/' + r["file"])}" data-full="{pid}/generate/{r["file"]}" alt="{e(b)} · {e(sc)} · {e(cw)} · {r["seconds"]} s · ${r["usd"]}">'
-                      f'<small>{r["seconds"]} s · ${r["usd"]:.3f}</small></td>') if r else '<td></td>'
-        rows += f'<tr><th class="view">{e(sc)}<small>{e(v)} · {e(cw)}</small></th>{cells}</tr>'
-    spent = sum(r['usd'] for r in recs)
-    return (f'<h3>Stage 3 · Generate <small>same view, scene and colorway across models · {len(recs)} images · '
-            f'US$ {spent:.2f} spent so far</small></h3><div class="scroll"><table class="grid gen">'
-            f'<thead><tr><th></th>{head}</tr></thead><tbody>{rows}</tbody></table></div>')
+    tag = f'<img class="{cls}" loading="lazy" src="{t}" data-full="{rel(path)}" alt="{e(caption or os.path.basename(path))}">'
+    return f'<figure>{tag}<figcaption>{caption}</figcaption></figure>' if caption else tag
 
 
-def routing(pid):
-    path = os.path.join(RUNS, pid, 'qa.json')
-    if not os.path.exists(path):
-        return ''
-    qa = json.load(open(path))
-    rows = ''.join(
-        f'<tr><td><img loading="lazy" src="{thumb(k, 240)}" data-full="{os.path.relpath(os.path.join(ROOT, k), RUNS).replace(os.sep, "/")}" alt="{e(os.path.basename(k))}"></td>'
-        f'<td>{e(r["view"])}</td><td>{e(r["colorway"])}</td><td>{r.get("seed", "")}</td><td>{r["delta_e"]["colour"]}</td>'
-        f'<td>{r["delta_e"]["parts"]}</td><td><span class="verdict {r["verdict"]}">{r["verdict"]}</span></td></tr>'
-        for k, r in sorted(qa.items()))
-    return (f'<h3>Stage 5 · Route <small>colour vs the spec (hue and chroma) and protected parts vs the reference, as delta E; '
-            f'publish under 5, regenerate over 10</small></h3><div class="scroll"><table class="grid qa"><thead><tr><th>Photo</th><th>View</th>'
-            f'<th>Colorway</th><th>Seed</th><th>Colour ΔE</th><th>Parts ΔE</th><th>Verdict</th></tr></thead><tbody>{rows}</tbody></table></div>')
+def when(path):
+    p = os.path.join(ROOT, path)
+    return datetime.datetime.fromtimestamp(os.path.getmtime(p)).strftime('%d/%m %H:%M') if os.path.exists(p) else '—'
 
 
-def consistency(pid):
-    path = os.path.join(RUNS, pid, 'consistency.json')
-    if not os.path.exists(path):
-        return ''
-    data = json.load(open(path))
-    rows = ''
-    for cw, r in sorted(data.items()):
-        parts = sorted(r['parts'].items(), key=lambda kv: -kv[1]['between_views'])
-        cells = ''.join(f'<td>{e(n)}<small>{v["between_views"]}</small></td>' for n, v in parts[:6])
-        rows += (f'<tr><th class="view">{e(cw)}<small>{r["parts"] and list(r["parts"].values())[0]["views"]} views</small></th>'
-                 f'<td><span class="verdict {"publish" if r["verdict"] == "consistent" else "review"}">{e(r["verdict"])}</span>'
-                 f'<small>worst {r["worst_between_views"]}</small></td>{cells}</tr>')
-    return (f'<h3>Stage 3b · Consistency <small>each part takes its colour from the spec in every view; the numbers are how '
-            f'far apart the views are, as delta E (consistent under 6)</small></h3>'
-            f'<div class="scroll"><table class="grid qa"><tbody>{rows}</tbody></table></div>')
+# ---------- the two inputs ----------
+def swatch(color):
+    return '#%02X%02X%02X' % tuple(round(max(0, min(1, v)) ** (1 / 2.2) * 255) for v in color['color'])
 
 
-def styles():
-    """Brands that were read from a moodboard: the references, the palette taken from them, and what was measured."""
-    out = ''
-    for name in sorted(os.listdir(os.path.join(ROOT, 'brands'))):
-        path = os.path.join(ROOT, 'brands', name, 'brand.json')
-        if not os.path.exists(path):
-            continue
-        b = json.load(open(path, encoding='utf-8'))
-        if not b.get('from_references'):
-            continue
-        refs = os.path.join(ROOT, b['from_references'])
-        thumbs = ''.join(
-            f'<img class="ref" loading="lazy" src="{thumb(os.path.join(refs, f))}" data-full="{os.path.relpath(os.path.join(refs, f), RUNS).replace(os.sep, "/")}" alt="reference">'
-            for f in sorted(os.listdir(refs))[:6] if f.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')))
-        sw = ''.join(f'<span class="cw"><span class="sw"><i style="background:{v}"></i></span>{e(k)} {e(v)}</span>'
-                     for k, v in b['colors'].items() if k in ('paper', 'ink', 'signal', 'stone'))
-        m = b.get('measured', {})
-        facts = (f"light: {e(m.get('light', {}).get('words', ''))} · contrast {m.get('light', {}).get('contrast')} · "
-                 f"air {m.get('composition', {}).get('air')} · templates {', '.join(m.get('composition', {}).get('templates', []))} · "
-                 f"headline {m.get('type', {}).get('weight')} {m.get('type', {}).get('case')}")
-        out += (f'<section class="product"><header><h2>{e(b["name"])}</h2><span class="tag">read from references</span></header>'
-                f'<div class="refs">{thumbs}</div><h3>Palette taken from them</h3><div class="cws">{sw}</div>'
-                f'<h3>Measured</h3><p class="sub">{facts}</p></section>')
-    return out
-
-
-def shots(pid):
-    path = os.path.join(RUNS, pid, 'shots.json')
-    if not os.path.exists(path):
-        return ''
-    figs = ''.join(f'<figure><img class="piece" loading="lazy" src="{thumb(sh["file"], 520)}" data-full="{os.path.relpath(os.path.join(ROOT, sh["file"]), RUNS).replace(os.sep, "/")}"'
-                   f' alt="{e(sh["framing"])} {e(sh["colorway"])}"><figcaption>{e(sh["framing"])} · {e(sh["colorway"])}</figcaption></figure>'
-                   for sh in json.load(open(path)))
-    return f'<h3>Stage 6 · Lifestyle shots <small>the product in a pair of hands, from its own framing</small></h3><div class="pieces">{figs}</div>'
-
-
-def layouts(pid):
-    d = os.path.join(RUNS, pid, 'layout')
-    files = sorted(os.path.relpath(os.path.join(r, f), d).replace(os.sep, '/') for r, _, fs in os.walk(d) for f in fs
-                   if f.endswith('.png')) if os.path.isdir(d) else []
-    if not files:
-        return ''
-    figs = ''.join(f'<figure><img class="piece" loading="lazy" src="{thumb(f'runs/{pid}/layout/{f}', 520)}" data-full="{pid}/layout/{f}" alt="{e(f[:-4])}"><figcaption>{e(f[:-4].replace('/', ' · '))}</figcaption></figure>' for f in files)
-    return f'<h3>Stage 4 · Layout <small>meridian brand: poster, spread and spec sheet, from the studio references</small></h3><div class="pieces">{figs}</div>'
-
-
-def product_section(pid):
-    spec = json.load(open(os.path.join(ROOT, 'products', pid, 'product.json'), encoding='utf-8'))
-    run = os.path.join(RUNS, pid, 'passes')
-    man_path = os.path.join(run, 'manifest.json')
-    man = json.load(open(man_path)) if os.path.exists(man_path) else None
-    when = datetime.datetime.fromtimestamp(os.path.getmtime(man_path)).strftime('%d/%m %H:%M') if man else '—'
-    chips = ''
+def product_card(product):
+    spec = json.load(open(os.path.join(ROOT, product, 'product.json'), encoding='utf-8'))
+    facts = ''.join(f'<li>{e(f)}</li>' for f in spec.get('facts', [])[:4])
+    cws = ''
     for cw, mats in spec['colorways'].items():
-        sw = ''.join(f'<i style="background:{rgb(p["color"])}" title="{e(m)}"></i>' for m, p in mats.items() if 'color' in p)
-        chips += f'<span class="cw"><span class="sw">{sw}</span>{e(cw)}</span>'
-    facts = ''.join(f'<li>{e(f)}</li>' for f in spec.get('facts', []))
-    size = spec.get('size_mm')
-    meta = [('Category', spec.get('category', '—')), ('Real size', ' × '.join(str(v) for v in size) + ' mm' if size else '—'),
-            ('Protected materials', ', '.join(spec.get('protected_materials', [])) or 'none'),
-            ('Source', spec.get('source', 'built for this project')), ('Last passes run', when)]
-    rows = ''
-    if man:
-        cws = [cw for cw in man['colorways'] if os.path.exists(os.path.join(run, next(iter(man['views'])), f'beauty_{cw}.png'))]
-        head = ''.join(f'<th>{e(cw)}</th>' for cw in cws) + ''.join(f'<th class="pass">{e(t)}</th>' for _, t in PASSES)
-        for view, v in man['views'].items():
-            cells = ''.join(f'<td class="beauty"><img loading="lazy" src="{thumb(f'runs/{pid}/passes/{view}/beauty_{cw}.png')}" data-full="{pid}/passes/{view}/beauty_{cw}.png" alt="{e(view)} {e(cw)}"></td>' for cw in cws)
-            cells += ''.join(f'<td class="pass"><img loading="lazy" src="{thumb(f'runs/{pid}/passes/{view}/{p}.png')}" data-full="{pid}/passes/{view}/{p}.png" alt="{e(view)} {e(t)}"></td>' for p, t in PASSES)
-            rows += f'<tr><th class="view">{e(view)}<small>az {v["azimuth"]}° · el {v["elevation"]}°</small></th>{cells}</tr>'
-        grid = f'<div class="scroll"><table class="grid"><thead><tr><th></th>{head}</tr></thead><tbody>{rows}</tbody></table></div>'
-    else:
-        grid = '<p class="empty">No passes yet. Run <code>blender -b -P pipeline/passes.py -- products/%s runs/%s/passes</code></p>' % (pid, pid)
+        dots = ''.join(f'<i style="background:{swatch(v)}"></i>' for k, v in mats.items()
+                       if 'color' in v and k in ('body', 'ab', 'bezel'))
+        cws += f'<span class="cw"><span class="sw">{dots}</span>{e(cw)}</span>'
+    return f'''<div class="card">
+      <h4>Product <small>{e(product)}</small></h4>
+      <model-viewer src="{rel(os.path.join(product, "product.glb"))}" camera-controls auto-rotate shadow-intensity="0.6"
+        environment-image="neutral" alt="{e(spec["name"])}"></model-viewer>
+      <dl><dt>Name</dt><dd>{e(spec["name"])}</dd><dt>Size</dt><dd>{" × ".join(str(v) for v in spec.get("size_mm", []))} mm</dd>
+      <dt>Protected</dt><dd>{e(", ".join(spec.get("protected_materials", [])) or "none")}</dd></dl>
+      <div class="cws">{cws}</div><ul class="facts">{facts}</ul></div>'''
+
+
+def brand_card(brand):
+    b = json.load(open(os.path.join(ROOT, brand, 'brand.json'), encoding='utf-8'))
+    sw = ''.join(f'<span class="cw"><span class="sw"><i style="background:{v}"></i></span>{e(k)}</span>'
+                 for k, v in b['colors'].items() if k in ('paper', 'stone', 'ink', 'signal'))
+    refs, measured = '', ''
+    if b.get('from_references'):
+        folder = os.path.join(ROOT, b['from_references'])
+        if os.path.isdir(folder):
+            refs = '<div class="refs">' + ''.join(
+                img(os.path.join(b['from_references'], f), 260, 'ref')
+                for f in sorted(os.listdir(folder))[:4] if f.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))) + '</div>'
+        m = b.get('measured', {})
+        measured = (f'<p class="sub">light: {e(m.get("light", {}).get("words", ""))} · contrast '
+                    f'{m.get("light", {}).get("contrast")} · air {m.get("composition", {}).get("air")} · '
+                    f'headline {m.get("type", {}).get("weight")} {m.get("type", {}).get("case")}</p>')
+    origin = 'read from a moodboard' if b.get('from_references') else 'written by hand'
+    return f'''<div class="card">
+      <h4>Brand <small>{e(brand)} · {origin}</small></h4>
+      {refs}<div class="cws">{sw}</div>{measured}
+      <p class="sub">{e(b.get("tone", ""))}</p></div>'''
+
+
+# ---------- one campaign, end to end ----------
+def campaign(path):
+    plan = json.load(open(path, encoding='utf-8'))
+    slug = os.path.basename(path)[:-5]
+    pid = os.path.basename(plan['product'])
+    gen_dir = os.path.join('runs', pid, 'generate', plan['backend'])
+    layout_dir = os.path.join(RUNS, pid, 'layout', slug)
+    pieces = sorted(glob.glob(os.path.join(layout_dir, '*.png')))
+    if not pieces:
+        return ''
+    qa_path, cons_path = os.path.join(RUNS, pid, 'qa.json'), os.path.join(RUNS, pid, 'consistency.json')
+    qa = json.load(open(qa_path)) if os.path.exists(qa_path) else {}
+    cons = json.load(open(cons_path)) if os.path.exists(cons_path) else {}
+
+    wanted = {(p['view'], p['colorway']) for p in plan['pieces']}
+    wanted |= {(p['view2'], p['colorway']) for p in plan['pieces'] if p.get('view2')}
+    photos = ''
+    for view, cw in sorted(wanted):
+        shots = [s for s in sorted(glob.glob(os.path.join(ROOT, gen_dir, f"{view}_{plan['scene']}_{cw}_s*.png")))
+                 if not s.endswith('_raw.png')]
+        if not shots:
+            continue
+        path_rel = os.path.relpath(shots[-1], ROOT).replace(os.sep, '/')
+        v = qa.get(path_rel, {})
+        badge = (f'<span class="verdict {v["verdict"]}">{v["verdict"]}</span>'
+                 f'<small> colour ΔE {v["delta_e"]["colour"]} · parts {v["delta_e"]["parts"]}</small>') if v else ''
+        photos += f'<figure>{img(path_rel, 320)}<figcaption>{e(view)} · {e(cw)}<br>{badge}</figcaption></figure>'
+
+    drift = ' · '.join(f"{e(cw)} {r['worst_between_views']}" for cw, r in sorted(cons.items()))
+    piece_figs = ''.join(img(os.path.relpath(p, ROOT).replace(os.sep, '/'), 520, 'piece', e(os.path.basename(p)[:-4]))
+                         for p in pieces)
+    templates = sorted({p['template'] for p in plan['pieces']})
     return f'''
-<section class="product" id="{pid}">
-  <header><h2>{e(spec.get("name", pid))}</h2>{'<span class="tag">fictional</span>' if spec.get('fictional') else ''}</header>
-  <div class="intro">
-    <model-viewer src="../products/{pid}/product.glb" camera-controls auto-rotate shadow-intensity="0.6" exposure="1"
-      environment-image="neutral" alt="{e(spec.get("name", pid))}, the input model"></model-viewer>
-    <div>
-      <h3>Input</h3>
-      <dl>{''.join(f'<dt>{e(k)}</dt><dd>{e(str(v))}</dd>' for k, v in meta)}</dl>
-      <h3>Colorways</h3><div class="cws">{chips}</div>
-      <h3>Facts for the copy</h3><ul class="facts">{facts}</ul>
-    </div>
-  </div>
-  <h3>Stage 1 · Passes <small>click any image to enlarge</small></h3>
-  {grid}
-  {generations(pid)}
-  {consistency(pid)}
-  {routing(pid)}
-  {shots(pid)}
-  {layouts(pid)}
+<section class="campaign" id="{slug}">
+  <header><h2>{e(plan.get("name", slug))}</h2>
+    <span class="tag">{len(pieces)} pieces</span><span class="tag">{e(plan["backend"])}</span>
+    <span class="tag">scene: {e(plan["scene"])}</span><span class="tag">{e(", ".join(templates))}</span>
+    <span class="tag">{when(os.path.relpath(pieces[-1], ROOT))}</span></header>
+
+  <h3>1 · Inputs <small>the product, and the look</small></h3>
+  <div class="cards">{product_card(plan["product"])}{brand_card(plan["brand"])}</div>
+
+  <h3>2 · Photos <small>generated from the passes of each view, then checked · drift between views: {drift or "—"}</small></h3>
+  <div class="pieces small">{photos}</div>
+
+  <h3>3 · Pieces <small>type, colour and logo from the brand; layouts sampled where the plan says auto</small></h3>
+  <div class="pieces">{piece_figs}</div>
 </section>'''
 
 
-products = [p for p in os.listdir(os.path.join(ROOT, 'products')) if os.path.exists(os.path.join(ROOT, 'products', p, 'product.json'))]
-# our own products first, then third-party ones
-products.sort(key=lambda p: ('source' in json.load(open(os.path.join(ROOT, 'products', p, 'product.json'), encoding='utf-8')), p))
-has = lambda *parts: any(os.path.exists(os.path.join(RUNS, p, *parts)) for p in products)
-done = {'0': any(json.load(open(os.path.join(ROOT, 'brands', n, 'brand.json'), encoding='utf-8')).get('from_references')
-                 for n in os.listdir(os.path.join(ROOT, 'brands'))
-                 if os.path.exists(os.path.join(ROOT, 'brands', n, 'brand.json'))),
-        '1': has('passes', 'manifest.json'), '2': os.path.isdir(os.path.join(ROOT, 'campaigns')), '3': has('generate'),
-        '3b': has('consistency.json'), '4': has('layout'), '5': has('qa.json'), '6': has('layout'), '7': True}
-# layout counts as started, not done, until it runs on generated images
-stages = ''.join(f'<li class="{"done" if done.get(n) else ""}"><b>{n}</b><span><strong>{e(t)}</strong>{e(d)}</span></li>' for n, t, d in STAGES)
-nav = ''.join(f'<a href="#{p}">{e(p)}</a>' for p in products)
+# ---------- appendix ----------
+def passes_block(pid):
+    man_path = os.path.join(RUNS, pid, 'passes', 'manifest.json')
+    if not os.path.exists(man_path):
+        return ''
+    man = json.load(open(man_path))
+    cols = [('depth', 'Depth'), ('normal', 'Normals'), ('mask', 'Mask'), ('mask_protected', 'Protected'), ('mask_parts', 'Parts')]
+    head = ''.join(f'<th>{e(cw)}</th>' for cw in man['colorways']) + ''.join(f'<th>{e(t)}</th>' for _, t in cols)
+    rows = ''
+    for view in man['views']:
+        cells = ''.join(f'<td class="beauty">{img(f"runs/{pid}/passes/{view}/beauty_{cw}.png", 220)}</td>'
+                        for cw in man['colorways'])
+        cells += ''.join(f'<td class="pass">{img(f"runs/{pid}/passes/{view}/{p}.png", 220)}</td>' for p, _ in cols)
+        rows += f'<tr><th class="view">{e(view)}</th>{cells}</tr>'
+    return (f'<details><summary>{e(pid)} · passes: {len(man["views"])} views, {when(f"runs/{pid}/passes/manifest.json")}</summary>'
+            f'<div class="scroll"><table class="grid"><thead><tr><th></th>{head}</tr></thead><tbody>{rows}</tbody></table></div></details>')
+
+
+def ledger_block():
+    rows, total = '', 0.0
+    for path in sorted(glob.glob(os.path.join(RUNS, '*', 'generate', 'ledger.jsonl'))):
+        pid = os.path.basename(os.path.dirname(os.path.dirname(path)))
+        by_backend = {}
+        for line in open(path, encoding='utf-8'):
+            if not line.strip():
+                continue
+            r = json.loads(line)
+            b = by_backend.setdefault(r['backend'], {'n': 0, 'usd': 0.0, 'seconds': 0.0})
+            b['n'] += 1
+            b['usd'] += r['usd']
+            b['seconds'] += r['seconds']
+        for backend, b in sorted(by_backend.items()):
+            total += b['usd']
+            rows += (f'<tr><td>{e(pid)}</td><td>{e(backend)}</td><td>{b["n"]}</td>'
+                     f'<td>{b["seconds"] / max(b["n"], 1):.0f} s</td><td>US$ {b["usd"]:.3f}</td></tr>')
+    if not rows:
+        return ''
+    return (f'<details><summary>Images generated, time and cost: US$ {total:.2f} in total</summary>'
+            f'<table class="grid qa"><thead><tr><th>Product</th><th>Backend</th><th>Images</th><th>Average</th>'
+            f'<th>Cost</th></tr></thead><tbody>{rows}</tbody></table></details>')
+
+
+campaigns = sorted(glob.glob(os.path.join(ROOT, 'campaigns', '*.json')))
+sections = ''.join(campaign(c) for c in campaigns)
+products = sorted(os.path.basename(os.path.dirname(os.path.dirname(p)))
+                  for p in glob.glob(os.path.join(RUNS, '*', 'passes', 'manifest.json')))
+nav = ''.join(f'<a href="#{os.path.basename(c)[:-5]}">{e(os.path.basename(c)[:-5])}</a>' for c in campaigns)
+stages = ''.join(f'<li><b>{n}</b><span><strong>{e(t)}</strong>{e(d)}</span></li>' for n, t, d in STAGES)
 page = f'''<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>From CAD to Shelf · Run report</title>
@@ -226,60 +214,67 @@ page = f'''<!doctype html>
   :root {{ --bg: #f4f2ee; --ink: #1d2230; --soft: #6b7080; --line: #dcd8d0; --card: #fff; --accent: #d9542b; }}
   * {{ box-sizing: border-box; }}
   body {{ margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, sans-serif; }}
-  main {{ max-width: 1400px; margin: 0 auto; padding: 32px 20px 80px; }}
+  main {{ max-width: 1500px; margin: 0 auto; padding: 32px 20px 80px; }}
   h1 {{ font-size: clamp(28px, 4vw, 44px); letter-spacing: -0.03em; margin: 0; }}
-  .sub {{ color: var(--soft); margin: 6px 0 24px; }}
+  h2 {{ margin: 0; font-size: 26px; letter-spacing: -0.02em; }}
+  h3 {{ font-size: 13px; text-transform: uppercase; letter-spacing: .07em; color: var(--soft); margin: 30px 0 12px; }}
+  h3 small, header small {{ text-transform: none; letter-spacing: 0; font-weight: 400; }}
+  h4 {{ margin: 0 0 10px; font-size: 14px; }} h4 small {{ color: var(--soft); font-weight: 400; }}
+  .sub {{ color: var(--soft); margin: 8px 0 0; font-size: 13px; }}
   nav a {{ margin-right: 14px; color: var(--accent); font-weight: 600; }}
-  .stages {{ list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin: 20px 0 40px; }}
-  .stages li {{ display: flex; gap: 10px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px; opacity: .55; }}
-  .stages li.done {{ opacity: 1; border-color: #7bb58a; }}
-  .stages b {{ flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--line); font-size: 13px; }}
-  .stages li.done b {{ background: #7bb58a; color: #fff; }}
-  .stages span {{ font-size: 13px; color: var(--soft); }} .stages strong {{ display: block; color: var(--ink); }}
-  .product {{ background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 22px; margin-bottom: 32px; }}
-  .product header {{ display: flex; align-items: center; gap: 10px; }} .product h2 {{ margin: 0; font-size: 28px; }}
-  .tag {{ font-size: 12px; background: var(--bg); border-radius: 99px; padding: 2px 10px; color: var(--soft); }}
-  h3 {{ font-size: 14px; text-transform: uppercase; letter-spacing: .06em; color: var(--soft); margin: 22px 0 10px; }} h3 small {{ text-transform: none; letter-spacing: 0; font-weight: 400; }}
-  .intro {{ display: grid; grid-template-columns: minmax(260px, 420px) 1fr; gap: 24px; margin-top: 12px; }}
-  model-viewer {{ width: 100%; height: 380px; background: #ebe8e2; border-radius: 12px; }}
-  dl {{ display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; }} dt {{ color: var(--soft); }} dd {{ margin: 0; }}
-  .cws {{ display: flex; flex-wrap: wrap; gap: 8px; }} .cw {{ display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 99px; padding: 4px 12px 4px 6px; }}
-  .sw {{ display: inline-flex; }} .sw i {{ width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(0,0,0,.12); margin-right: -4px; }}
-  .facts {{ margin: 0; padding-left: 18px; }}
-  .scroll {{ overflow-x: auto; }}
-  .grid {{ border-collapse: separate; border-spacing: 6px; }} .grid th {{ font-size: 12px; color: var(--soft); font-weight: 600; text-align: center; }}
-  .grid th.view {{ text-align: left; white-space: nowrap; color: var(--ink); }} .grid th.view small {{ display: block; color: var(--soft); font-weight: 400; }}
-  .grid img {{ width: 150px; height: 150px; object-fit: contain; border-radius: 8px; cursor: zoom-in; display: block; }}
-  .grid td.beauty img {{ background: #e6e3dd; }} .grid td.pass img {{ background: #000; }}
-  .empty {{ color: var(--soft); }}
-  .refs {{ display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }}
-  .refs img {{ height: 150px; border-radius: 8px; border: 1px solid var(--line); }}
-  .grid.qa img {{ width: 110px; height: 110px; object-fit: cover; }} .grid.qa td {{ text-align: center; font-size: 13px; }} .grid.qa td small {{ display: block; color: var(--soft); }}
-  .verdict {{ padding: 3px 10px; border-radius: 99px; font-weight: 600; font-size: 12px; }}
+  .stages {{ list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; margin: 20px 0 36px; }}
+  .stages li {{ display: flex; gap: 10px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }}
+  .stages b {{ flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: #7bb58a; color: #fff; font-size: 12px; }}
+  .stages span {{ font-size: 12.5px; color: var(--soft); }} .stages strong {{ display: block; color: var(--ink); font-size: 14px; }}
+  .campaign {{ background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 24px; margin-bottom: 30px; }}
+  .campaign header {{ display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }}
+  .tag {{ font-size: 12px; background: var(--bg); border-radius: 99px; padding: 3px 10px; color: var(--soft); }}
+  .cards {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; }}
+  .card {{ border: 1px solid var(--line); border-radius: 12px; padding: 16px; }}
+  model-viewer {{ width: 100%; height: 240px; background: #ebe8e2; border-radius: 10px; margin-bottom: 12px; }}
+  dl {{ display: grid; grid-template-columns: max-content 1fr; gap: 2px 14px; margin: 0 0 10px; font-size: 13px; }}
+  dt {{ color: var(--soft); }} dd {{ margin: 0; }}
+  .cws {{ display: flex; flex-wrap: wrap; gap: 8px; }}
+  .cw {{ display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 99px; padding: 3px 12px 3px 6px; font-size: 13px; }}
+  .sw {{ display: inline-flex; }} .sw i {{ width: 13px; height: 13px; border-radius: 50%; border: 1px solid rgba(0,0,0,.12); margin-right: -3px; }}
+  .facts {{ margin: 10px 0 0; padding-left: 18px; font-size: 13px; color: var(--soft); }}
+  .refs {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }}
+  .refs img {{ height: 110px; border-radius: 8px; border: 1px solid var(--line); cursor: zoom-in; }}
+  .pieces {{ display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }}
+  .pieces figure {{ margin: 0; max-width: 270px; }}
+  .pieces img {{ max-height: 300px; max-width: 270px; width: auto; height: auto; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,.08); cursor: zoom-in; display: block; background: #eee; }}
+  .pieces.small img {{ max-height: 190px; }}
+  .pieces figcaption {{ font-size: 12px; color: var(--soft); margin-top: 6px; }}
+  .verdict {{ padding: 2px 9px; border-radius: 99px; font-weight: 600; font-size: 11px; }}
   .verdict.publish {{ background: #dff0e2; color: #2d6a3b; }} .verdict.review {{ background: #fdf0d5; color: #8a5a00; }}
   .verdict.regenerate {{ background: #fbe0da; color: #9b2c16; }}
-  .grid.gen img {{ width: 260px; height: 260px; object-fit: cover; }} .grid td.gen small {{ display: block; font-size: 11px; color: var(--soft); text-align: center; }}
-  .pieces {{ display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }} .pieces figure {{ margin: 0; }}
-  .pieces img {{ height: 300px; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,.08); cursor: zoom-in; display: block; }}
-  .pieces figcaption {{ font-size: 12px; color: var(--soft); margin-top: 6px; }}
-  #box {{ position: fixed; inset: 0; background: rgba(20,22,30,.88); display: none; place-items: center; z-index: 9; cursor: zoom-out; }}
+  details {{ background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; margin-bottom: 14px; }}
+  summary {{ cursor: pointer; font-weight: 600; }}
+  .scroll {{ overflow-x: auto; }}
+  .grid {{ border-collapse: separate; border-spacing: 6px; margin-top: 12px; }}
+  .grid th {{ font-size: 12px; color: var(--soft); font-weight: 600; }} .grid th.view {{ text-align: left; }}
+  .grid img {{ width: 130px; height: 130px; object-fit: contain; border-radius: 6px; cursor: zoom-in; display: block; }}
+  .grid td.pass img {{ background: #000; }} .grid td.beauty img {{ background: #e6e3dd; }}
+  .grid.qa td {{ text-align: center; font-size: 13px; }}
+  #box {{ position: fixed; inset: 0; background: rgba(20,22,30,.9); display: none; place-items: center; z-index: 9; cursor: zoom-out; }}
   #box.on {{ display: grid; }} #box img {{ max-width: 94vw; max-height: 90vh; background: #e6e3dd; border-radius: 10px; }}
   #box p {{ position: fixed; bottom: 14px; left: 0; right: 0; text-align: center; color: #fff; margin: 0; }}
-  @media (max-width: 760px) {{ .intro {{ grid-template-columns: 1fr; }} }}
 </style></head>
 <body><main>
   <h1>From CAD to Shelf</h1>
-  <p class="sub">Run report · generated {datetime.datetime.now().strftime('%d/%m/%Y %H:%M')} · {len(products)} products</p>
+  <p class="sub">Run report · generated {datetime.datetime.now().strftime('%d/%m/%Y %H:%M')} · {len(campaigns)} campaigns · {len(products)} products</p>
   <nav>{nav}</nav>
   <ol class="stages">{stages}</ol>
-  {styles()}
-  {''.join(product_section(p) for p in products)}
+  {sections}
+  <h3>Appendix <small>the technical passes, and what was generated</small></h3>
+  {''.join(passes_block(p) for p in products)}
+  {ledger_block()}
 </main>
 <div id="box"><img alt=""><p></p></div>
 <script>
   const box = document.querySelector('#box');
   document.addEventListener('click', (ev) => {{
-    const img = ev.target.closest('.grid img, .pieces img');
+    const img = ev.target.closest('.pieces img, .grid img, .refs img');
     if (img) {{ box.querySelector('img').src = img.dataset.full || img.src; box.querySelector('p').textContent = img.alt; box.classList.add('on'); }}
     else if (ev.target.closest('#box')) box.classList.remove('on');
   }});
