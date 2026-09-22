@@ -20,6 +20,30 @@ STAGES = [
 ]
 PASSES = [('depth', 'Depth'), ('normal', 'Normals'), ('mask', 'Mask'), ('mask_protected', 'Protected parts')]
 e = html.escape
+THUMBS = os.path.join(RUNS, '_thumbs')
+
+
+def thumb(path, side=420):
+    """A small JPEG for the page; the full image is fetched only when one is opened. Cached by modification time."""
+    from PIL import Image
+    src = path if os.path.isabs(path) else os.path.join(ROOT, path)
+    if not os.path.exists(src):
+        return None
+    key = f'{abs(hash(os.path.relpath(src, ROOT)))}-{int(os.path.getmtime(src))}-{side}.jpg'
+    out = os.path.join(THUMBS, key)
+    if not os.path.exists(out):
+        os.makedirs(THUMBS, exist_ok=True)
+        im = Image.open(src)
+        if im.mode == 'RGBA':
+            bg = Image.new('RGBA', im.size, (216, 216, 216, 255))
+            bg.alpha_composite(im)
+            im = bg
+        im = im.convert('RGB')
+        im.thumbnail((side, side))
+        im.save(out, quality=82)
+    return '_thumbs/' + key
+
+
 
 
 def rgb(c):
@@ -43,10 +67,10 @@ def generations(pid):
     head = '<th>Reference</th>' + ''.join(f'<th>{e(b)}</th>' for b in backends)
     rows = ''
     for v, sc, cw in combos:
-        cells = f'<td class="beauty"><img loading="lazy" src="{pid}/passes/{v}/beauty_{cw}.png" alt="reference {e(v)} {e(cw)}"></td>'
+        cells = f'<td class="beauty"><img loading="lazy" src="{thumb(f'runs/{pid}/passes/{v}/beauty_{cw}.png')}" data-full="{pid}/passes/{v}/beauty_{cw}.png" alt="reference {e(v)} {e(cw)}"></td>'
         for b in backends:
             r = latest.get((v, sc, cw, b))
-            cells += (f'<td class="gen"><img loading="lazy" src="{pid}/generate/{r["file"]}" alt="{e(b)} · {e(sc)} · {e(cw)} · {r["seconds"]} s · ${r["usd"]}">'
+            cells += (f'<td class="gen"><img loading="lazy" src="{thumb(f'runs/{pid}/generate/' + r["file"])}" data-full="{pid}/generate/{r["file"]}" alt="{e(b)} · {e(sc)} · {e(cw)} · {r["seconds"]} s · ${r["usd"]}">'
                       f'<small>{r["seconds"]} s · ${r["usd"]:.3f}</small></td>') if r else '<td></td>'
         rows += f'<tr><th class="view">{e(sc)}<small>{e(v)} · {e(cw)}</small></th>{cells}</tr>'
     spent = sum(r['usd'] for r in recs)
@@ -61,7 +85,7 @@ def routing(pid):
         return ''
     qa = json.load(open(path))
     rows = ''.join(
-        f'<tr><td><img loading="lazy" src="{os.path.relpath(os.path.join(ROOT, k), RUNS).replace(os.sep, "/")}" alt="{e(os.path.basename(k))}"></td>'
+        f'<tr><td><img loading="lazy" src="{thumb(k, 240)}" data-full="{os.path.relpath(os.path.join(ROOT, k), RUNS).replace(os.sep, "/")}" alt="{e(os.path.basename(k))}"></td>'
         f'<td>{e(r["view"])}</td><td>{e(r["colorway"])}</td><td>{r.get("seed", "")}</td><td>{r["delta_e"]["colour"]}</td>'
         f'<td>{r["delta_e"]["parts"]}</td><td><span class="verdict {r["verdict"]}">{r["verdict"]}</span></td></tr>'
         for k, r in sorted(qa.items()))
@@ -99,7 +123,7 @@ def styles():
             continue
         refs = os.path.join(ROOT, b['from_references'])
         thumbs = ''.join(
-            f'<img class="ref" loading="lazy" src="{os.path.relpath(os.path.join(refs, f), RUNS).replace(os.sep, "/")}" alt="reference">'
+            f'<img class="ref" loading="lazy" src="{thumb(os.path.join(refs, f))}" data-full="{os.path.relpath(os.path.join(refs, f), RUNS).replace(os.sep, "/")}" alt="reference">'
             for f in sorted(os.listdir(refs))[:6] if f.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')))
         sw = ''.join(f'<span class="cw"><span class="sw"><i style="background:{v}"></i></span>{e(k)} {e(v)}</span>'
                      for k, v in b['colors'].items() if k in ('paper', 'ink', 'signal', 'stone'))
@@ -117,7 +141,7 @@ def shots(pid):
     path = os.path.join(RUNS, pid, 'shots.json')
     if not os.path.exists(path):
         return ''
-    figs = ''.join(f'<figure><img class="piece" loading="lazy" src="{os.path.relpath(os.path.join(ROOT, sh["file"]), RUNS).replace(os.sep, "/")}"'
+    figs = ''.join(f'<figure><img class="piece" loading="lazy" src="{thumb(sh["file"], 520)}" data-full="{os.path.relpath(os.path.join(ROOT, sh["file"]), RUNS).replace(os.sep, "/")}"'
                    f' alt="{e(sh["framing"])} {e(sh["colorway"])}"><figcaption>{e(sh["framing"])} · {e(sh["colorway"])}</figcaption></figure>'
                    for sh in json.load(open(path)))
     return f'<h3>Stage 6 · Lifestyle shots <small>the product in a pair of hands, from its own framing</small></h3><div class="pieces">{figs}</div>'
@@ -129,7 +153,7 @@ def layouts(pid):
                    if f.endswith('.png')) if os.path.isdir(d) else []
     if not files:
         return ''
-    figs = ''.join(f'<figure><img class="piece" loading="lazy" src="{pid}/layout/{f}" alt="{e(f[:-4])}"><figcaption>{e(f[:-4].replace('/', ' · '))}</figcaption></figure>' for f in files)
+    figs = ''.join(f'<figure><img class="piece" loading="lazy" src="{thumb(f'runs/{pid}/layout/{f}', 520)}" data-full="{pid}/layout/{f}" alt="{e(f[:-4])}"><figcaption>{e(f[:-4].replace('/', ' · '))}</figcaption></figure>' for f in files)
     return f'<h3>Stage 4 · Layout <small>meridian brand: poster, spread and spec sheet, from the studio references</small></h3><div class="pieces">{figs}</div>'
 
 
@@ -153,8 +177,8 @@ def product_section(pid):
         cws = [cw for cw in man['colorways'] if os.path.exists(os.path.join(run, next(iter(man['views'])), f'beauty_{cw}.png'))]
         head = ''.join(f'<th>{e(cw)}</th>' for cw in cws) + ''.join(f'<th class="pass">{e(t)}</th>' for _, t in PASSES)
         for view, v in man['views'].items():
-            cells = ''.join(f'<td class="beauty"><img loading="lazy" src="{pid}/passes/{view}/beauty_{cw}.png" alt="{e(view)} {e(cw)}"></td>' for cw in cws)
-            cells += ''.join(f'<td class="pass"><img loading="lazy" src="{pid}/passes/{view}/{p}.png" alt="{e(view)} {e(t)}"></td>' for p, t in PASSES)
+            cells = ''.join(f'<td class="beauty"><img loading="lazy" src="{thumb(f'runs/{pid}/passes/{view}/beauty_{cw}.png')}" data-full="{pid}/passes/{view}/beauty_{cw}.png" alt="{e(view)} {e(cw)}"></td>' for cw in cws)
+            cells += ''.join(f'<td class="pass"><img loading="lazy" src="{thumb(f'runs/{pid}/passes/{view}/{p}.png')}" data-full="{pid}/passes/{view}/{p}.png" alt="{e(view)} {e(t)}"></td>' for p, t in PASSES)
             rows += f'<tr><th class="view">{e(view)}<small>az {v["azimuth"]}° · el {v["elevation"]}°</small></th>{cells}</tr>'
         grid = f'<div class="scroll"><table class="grid"><thead><tr><th></th>{head}</tr></thead><tbody>{rows}</tbody></table></div>'
     else:
@@ -256,7 +280,7 @@ page = f'''<!doctype html>
   const box = document.querySelector('#box');
   document.addEventListener('click', (ev) => {{
     const img = ev.target.closest('.grid img, .pieces img');
-    if (img) {{ box.querySelector('img').src = img.src; box.querySelector('p').textContent = img.alt; box.classList.add('on'); }}
+    if (img) {{ box.querySelector('img').src = img.dataset.full || img.src; box.querySelector('p').textContent = img.alt; box.classList.add('on'); }}
     else if (ev.target.closest('#box')) box.classList.remove('on');
   }});
   addEventListener('keydown', (ev) => {{ if (ev.key === 'Escape') box.classList.remove('on'); }});
