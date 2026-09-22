@@ -28,6 +28,8 @@ VIEWS = spec.get('passes', {}).get('views', {
     'front': [0, 4], 'left': [-35, 14], 'right': [35, 14], 'high': [-20, 42],
 })
 LENS = 70
+if '--views' in args:  # extra framings for one run, e.g. --views held=0,24
+    VIEWS = {k: [float(x) for x in v.split(',')] for k, v in (item.split('=') for item in args[args.index('--views') + 1].split(';'))}
 
 
 # ---------- load and normalise ----------
@@ -172,6 +174,22 @@ MASKS_ONLY = '--masks-only' in args
 white, _, _ = emission('pass_white')
 black, _, _ = emission('pass_black', (0, 0, 0))
 
+# every material gets a flat colour of its own, so later stages can find each part in the photo
+MATERIALS = sorted({m.name for o in meshes for m in [s.material for s in o.material_slots] if m})
+PART_COLORS = {}
+for i, name in enumerate(MATERIALS):
+    h = (i * 0.61803398875) % 1.0  # spread the hues, so no two parts look alike
+    import colorsys
+    PART_COLORS[name] = [round(v, 4) for v in colorsys.hsv_to_rgb(h, 0.85, 1.0 if i % 2 else 0.7)]
+part_mats = {n: emission(f'part_{n}', c)[0] for n, c in PART_COLORS.items()}
+
+
+def part_material(o):
+    m = next((m for m in original[o.name] if m), None)
+    return part_mats.get(m.name if m else '', black)
+
+
+
 
 def is_protected(o, names=None):
     return any(m and m.name in (names or protected) for m in original[o.name])
@@ -229,7 +247,7 @@ tan_x = math.tan(half) * W_PX / max(W_PX, H_PX)
 tan_y = math.tan(half) * H_PX / max(W_PX, H_PX)
 # the product fills the frame below the headroom; lens shift slides that window down without tilting the camera
 cam.data.shift_y = HEADROOM / 2 * H_PX / max(W_PX, H_PX)
-FILL = spec.get('passes', {}).get('fill', 0.82)  # how much of the frame the product takes
+FILL = float(args[args.index('--fill') + 1]) if '--fill' in args else spec.get('passes', {}).get('fill', 0.82)  # share of the frame
 corners = [o.matrix_world @ Vector(c) for o in meshes for c in o.bound_box]
 dist = radius / math.sin(half)  # the lights keep this safe distance; each view gets its own framing
 
@@ -278,7 +296,7 @@ def render(path, transparent=False, view='Standard'):
     bpy.ops.render.render(write_still=True)
 
 
-manifest = {'product': spec.get('name'), 'format': FMT, 'size_px': [W_PX, H_PX], 'headroom': HEADROOM, 'resolution': RES, 'lens_mm': LENS, 'center': list(center), 'radius': radius,
+manifest = {'product': spec.get('name'), 'materials': PART_COLORS, 'format': FMT, 'size_px': [W_PX, H_PX], 'headroom': HEADROOM, 'resolution': RES, 'lens_mm': LENS, 'center': list(center), 'radius': radius,
             'size_m': list(hi - lo), 'views': {}, 'colorways': list(spec['colorways'])}
 colorways = list(spec['colorways'])[:1] if QUICK else list(spec['colorways'])
 for view, (az, el) in VIEWS.items():
@@ -301,7 +319,8 @@ for view, (az, el) in VIEWS.items():
                      ('normal', lambda o: normal),
                      ('mask', lambda o: white),
                      ('mask_protected', lambda o: white if is_protected(o) else black),
-                     ('mask_exact', lambda o: white if exact and is_protected(o, exact) else black)):
+                     ('mask_exact', lambda o: white if exact and is_protected(o, exact) else black),
+                     ('mask_parts', part_material)):
         paint(fn)
         render(os.path.join(d, f'{name}.png'), view='Raw')  # data, not a picture: no tone mapping
         restore()

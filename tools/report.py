@@ -11,6 +11,7 @@ STAGES = [
     ('1', 'Passes', 'Depth, normals, masks and a studio reference per view and colorway, from any product.'),
     ('2', 'Plan', 'A campaign file lists the pieces: template, format, view, colorway, scene. Jev will propose it later.'),
     ('3', 'Generate', 'A ComfyUI graph turns the passes and the plan into photoreal images.'),
+    ('3b', 'Consistency', 'Every part takes its spec colour in every view, keeping the photo's light. Measured across views.'),
     ('4', 'Layout', 'The brand on top: real type, colours and logo, per template and format.'),
     ('5', 'Route', 'Colour and parts checked per photo: publish, review, or regenerate with a new seed. Jev later.'),
     ('6', 'Copy', 'Type and copy from the brand file and the product facts, never generated.'),
@@ -67,6 +68,23 @@ def routing(pid):
             f'<th>Colorway</th><th>Seed</th><th>Colour ΔE</th><th>Parts ΔE</th><th>Verdict</th></tr></thead><tbody>{rows}</tbody></table></div>')
 
 
+def consistency(pid):
+    path = os.path.join(RUNS, pid, 'consistency.json')
+    if not os.path.exists(path):
+        return ''
+    data = json.load(open(path))
+    rows = ''
+    for cw, r in sorted(data.items()):
+        parts = sorted(r['parts'].items(), key=lambda kv: -kv[1]['between_views'])
+        cells = ''.join(f'<td>{e(n)}<small>{v["between_views"]}</small></td>' for n, v in parts[:6])
+        rows += (f'<tr><th class="view">{e(cw)}<small>{r["parts"] and list(r["parts"].values())[0]["views"]} views</small></th>'
+                 f'<td><span class="verdict {"publish" if r["verdict"] == "consistent" else "review"}">{e(r["verdict"])}</span>'
+                 f'<small>worst {r["worst_between_views"]}</small></td>{cells}</tr>')
+    return (f'<h3>Stage 3b · Consistency <small>each part takes its colour from the spec in every view; the numbers are how '
+            f'far apart the views are, as delta E (consistent under 6)</small></h3>'
+            f'<div class="scroll"><table class="grid qa"><tbody>{rows}</tbody></table></div>')
+
+
 def layouts(pid):
     d = os.path.join(RUNS, pid, 'layout')
     files = sorted(os.path.relpath(os.path.join(r, f), d).replace(os.sep, '/') for r, _, fs in os.walk(d) for f in fs
@@ -119,6 +137,7 @@ def product_section(pid):
   <h3>Stage 1 · Passes <small>click any image to enlarge</small></h3>
   {grid}
   {generations(pid)}
+  {consistency(pid)}
   {routing(pid)}
   {layouts(pid)}
 </section>'''
@@ -129,7 +148,7 @@ products = [p for p in os.listdir(os.path.join(ROOT, 'products')) if os.path.exi
 products.sort(key=lambda p: ('source' in json.load(open(os.path.join(ROOT, 'products', p, 'product.json'), encoding='utf-8')), p))
 has = lambda *parts: any(os.path.exists(os.path.join(RUNS, p, *parts)) for p in products)
 done = {'1': has('passes', 'manifest.json'), '2': os.path.isdir(os.path.join(ROOT, 'campaigns')), '3': has('generate'),
-        '4': has('layout'), '5': has('qa.json'), '6': has('layout'), '7': True}
+        '3b': has('consistency.json'), '4': has('layout'), '5': has('qa.json'), '6': has('layout'), '7': True}
 # layout counts as started, not done, until it runs on generated images
 stages = ''.join(f'<li class="{"done" if done.get(n) else ""}"><b>{n}</b><span><strong>{e(t)}</strong>{e(d)}</span></li>' for n, t, d in STAGES)
 nav = ''.join(f'<a href="#{p}">{e(p)}</a>' for p in products)
@@ -167,7 +186,7 @@ page = f'''<!doctype html>
   .grid img {{ width: 150px; height: 150px; object-fit: contain; border-radius: 8px; cursor: zoom-in; display: block; }}
   .grid td.beauty img {{ background: #e6e3dd; }} .grid td.pass img {{ background: #000; }}
   .empty {{ color: var(--soft); }}
-  .grid.qa img {{ width: 110px; height: 110px; object-fit: cover; }} .grid.qa td {{ text-align: center; font-size: 13px; }}
+  .grid.qa img {{ width: 110px; height: 110px; object-fit: cover; }} .grid.qa td {{ text-align: center; font-size: 13px; }} .grid.qa td small {{ display: block; color: var(--soft); }}
   .verdict {{ padding: 3px 10px; border-radius: 99px; font-weight: 600; font-size: 12px; }}
   .verdict.publish {{ background: #dff0e2; color: #2d6a3b; }} .verdict.review {{ background: #fdf0d5; color: #8a5a00; }}
   .verdict.regenerate {{ background: #fbe0da; color: #9b2c16; }}

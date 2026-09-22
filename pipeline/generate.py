@@ -77,6 +77,14 @@ def describe(spec, colorway):
     return f"{spec.get('category', 'product')} called {spec['name']}, {colorway.replace('-', ' ')} colorway"
 
 
+def finish(img, passes, view, colorway, spec):
+    """Everything that has to be true of the product, applied after generation, in order:
+    every part gets its spec colour (consistency), then the protected parts come back (screen, logo, buttons)."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from consistency import enforce
+    return lock_protected(enforce(img, passes, view, colorway, spec), passes, view, colorway)
+
+
 def lock_protected(img, passes, view, colorway, light=0.2, feather=1.5):
     """Bring the protected parts back from the reference, after generation. Two kinds:
     exact parts (mask_exact: a screen, a logo) are copied as they are; the other protected parts keep the reference's
@@ -89,9 +97,11 @@ def lock_protected(img, passes, view, colorway, light=0.2, feather=1.5):
     if not os.path.exists(os.path.join(d, 'mask_protected.png')):
         return img
     ref = on_grey(os.path.join(d, f'beauty_{colorway}.png')).resize(img.size, Image.LANCZOS)
-    g, r = (np.asarray(im.convert('LAB')).astype(float) for im in (img, ref))
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from qa import lab, rgb
+    g, r = lab(img), lab(ref)
     r[..., 0] = g[..., 0] * light + r[..., 0] * (1 - light)
-    tinted = Image.fromarray(r.clip(0, 255).astype('uint8'), 'LAB').convert('RGB')
+    tinted = rgb(r)
     out = Image.composite(tinted, img, load('mask_protected.png'))
     if os.path.exists(os.path.join(d, 'mask_exact.png')):
         out = Image.composite(ref, out, load('mask_exact.png'))
@@ -123,15 +133,15 @@ def local_sdxl(passes, view, colorway, scene, spec, seed):
         'img_start': {'class_type': 'LoadImage', 'inputs': {'image': start}},
         'apply_depth': {'class_type': 'ControlNetApplyAdvanced', 'inputs': {
             'positive': ['pos', 0], 'negative': ['neg', 0], 'control_net': ['cn_depth', 0], 'image': ['img_depth', 0],
-            'strength': 0.75, 'start_percent': 0.0, 'end_percent': 0.8, 'vae': ['ckpt', 2]}},
+            'strength': scene.get('depth', 0.75), 'start_percent': 0.0, 'end_percent': scene.get('depth_end', 0.8), 'vae': ['ckpt', 2]}},
         'apply_normal': {'class_type': 'ControlNetApplyAdvanced', 'inputs': {
             'positive': ['apply_depth', 0], 'negative': ['apply_depth', 1], 'control_net': ['cn_normal', 0], 'image': ['img_normal', 0],
-            'strength': 0.45, 'start_percent': 0.0, 'end_percent': 0.6, 'vae': ['ckpt', 2]}},
+            'strength': scene.get('normal', 0.45), 'start_percent': 0.0, 'end_percent': 0.6, 'vae': ['ckpt', 2]}},
         # start from the studio reference, so the colourway survives; the ControlNets hold the shape
         'latent': {'class_type': 'VAEEncode', 'inputs': {'pixels': ['img_start', 0], 'vae': ['ckpt', 2]}},
         'sample': {'class_type': 'KSampler', 'inputs': {
             'model': ['model', 0], 'seed': seed, **SAMPLING[FAST],
-            'positive': ['apply_normal', 0], 'negative': ['apply_normal', 1], 'latent_image': ['latent', 0], 'denoise': 0.82}},
+            'positive': ['apply_normal', 0], 'negative': ['apply_normal', 1], 'latent_image': ['latent', 0], 'denoise': scene.get('denoise', 0.82)}},
         'decode': {'class_type': 'VAEDecode', 'inputs': {'samples': ['sample', 0], 'vae': ['ckpt', 2]}},
         'save': {'class_type': 'SaveImage', 'inputs': {'images': ['decode', 0], 'filename_prefix': 'cad-to-shelf/local'}},
     }
@@ -191,7 +201,7 @@ if __name__ == '__main__':
     seconds = round(time.time() - t0, 1)
     raw = img
     if backend == 'local-sdxl' and '--no-lock' not in args:
-        img = lock_protected(img, passes, view, colorway)
+        img = finish(img, passes, view, colorway, spec)
     out = os.path.join(os.path.dirname(os.path.abspath(passes)), 'generate', backend)
     os.makedirs(out, exist_ok=True)
     name = f'{view}_{scene_id}_{colorway}_s{seed}' + (f"_{opt('--format')}" if opt('--format') else '')

@@ -26,6 +26,19 @@ def lab(img):
     return np.stack([116 * f[..., 1] - 16, 500 * (f[..., 0] - f[..., 1]), 200 * (f[..., 1] - f[..., 2])], -1)
 
 
+def rgb(lab_array):
+    """CIE Lab -> sRGB, the inverse of lab(). PIL's own LAB conversion is not colour managed, so we do both ways here."""
+    l, a, b = lab_array[..., 0], lab_array[..., 1], lab_array[..., 2]
+    fy = (l + 16) / 116
+    f = np.stack([fy + a / 500, fy, fy - b / 200], -1)
+    xyz = np.where(f ** 3 > 216 / 24389, f ** 3, (116 * f - 16) / (24389 / 27))
+    xyz *= np.array([0.95047, 1.0, 1.08883])
+    lin = xyz @ np.array([[3.2406, -1.5372, -0.4986], [-0.9689, 1.8758, 0.0415], [0.0557, -0.2040, 1.0570]]).T
+    lin = np.clip(lin, 0, 1)
+    srgb = np.where(lin <= 0.0031308, lin * 12.92, 1.055 * lin ** (1 / 2.4) - 0.055)
+    return Image.fromarray(np.clip(srgb * 255 + 0.5, 0, 255).astype('uint8'), 'RGB')
+
+
 def spec_lab(linear):
     """A colour as the spec stores it (linear, like a material) -> Lab."""
     srgb = [v * 12.92 if v <= 0.0031308 else 1.055 * v ** (1 / 2.4) - 0.055 for v in linear]

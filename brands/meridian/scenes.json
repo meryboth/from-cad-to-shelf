@@ -6,5 +6,13 @@
   "concrete-desk": {
     "label": "Concrete desk",
     "prompt": "on a pale concrete desk in a quiet design studio, soft daylight from a large window, a steel ruler and a notebook softly out of focus, calm and precise"
+  },
+  "held": {
+    "label": "Held in two hands",
+    "prompt": "held in two hands of a person, the hands grip it by the left and right sides, fingers wrap around the edges, nothing covers the screen or the buttons, close-up lifestyle product photo, soft window daylight, a softly blurred light grey interior behind, natural skin, realistic hands with five fingers",
+    "depth": 0.6,
+    "depth_end": 0.7,
+    "normal": 0.3,
+    "denoise": 0.95
   }
 }

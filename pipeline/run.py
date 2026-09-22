@@ -63,6 +63,15 @@ for v, cw in needed:
             break
 json.dump(qa, open(qa_path, 'w'), indent=2)
 
+# 5b · consistency across the views of each colorway: the same object, in every piece
+cons = {}
+for cw in sorted({cw for _, cw in needed}):
+    images = [chosen[k] for k in chosen if k[1] == cw]
+    out = step(f'consistency {cw}', [PY, 'pipeline/consistency.py', '--check', passes, cw, product] + images)
+    cons[cw] = json.loads(out)
+    print(f"   {cons[cw]['verdict']}  worst drift between views: {cons[cw]['worst_between_views']}")
+json.dump(cons, open(os.path.join(ROOT, 'runs', pid, 'consistency.json'), 'w'), indent=2)
+
 # 4 · layout: each piece on the generated photo, cut with the mask of the camera it came from
 layout_dir = os.path.join('runs', pid, 'layout', os.path.basename(plan.get('slug', args[0]))[:-5])
 for p in plan['pieces']:
