@@ -89,5 +89,28 @@ for p in plan['pieces']:
     step(f"layout {p['template']} {p['format']} {p['colorway']}", cmd)
     subprocess.run([PY, 'tools/report.py'], cwd=ROOT, capture_output=True)  # each piece shows up as soon as it exists
 
+# 6 · lifestyle shots: the product in someone's hands, from their own framing of the same model
+shots = []
+for shot in plan.get('shots', []):
+    framing = plan['framings'][shot['framing']]
+    shot_passes = os.path.join('runs', pid, f"passes-{shot['framing']}")
+    if not os.path.exists(os.path.join(ROOT, shot_passes, 'manifest.json')):
+        step(f"passes {shot['framing']}", [BLENDER, '-b', '-P', 'pipeline/passes.py', '--', product, shot_passes,
+                                           '--views', framing['views'], '--fill', str(framing['fill']),
+                                           '--format', framing['format']])
+    view = framing['views'].split('=')[0]
+    seed = str(shot.get('seed', plan.get('seed', 7)))
+    out = os.path.join(shot_passes.replace('passes-', 'shots-'), f"{shot['framing']}_{shot['scene']}_{shot['colorway']}_s{seed}.png")
+    out = os.path.join('runs', pid, 'shots', f"{shot['framing']}_{shot['scene']}_{shot['colorway']}_s{seed}.png")
+    if not os.path.exists(os.path.join(ROOT, out)) or '--force' in args:
+        step(f"shot {shot['framing']} {shot['colorway']}",
+             [PY, 'pipeline/generate.py', product, brand, shot_passes, '--backend', backend, '--view', view,
+              '--scene', shot['scene'], '--colorway', shot['colorway'], '--seed', seed, '--out', out] + extra)
+    shots.append({'file': out.replace(os.sep, '/'), 'framing': shot['framing'], 'colorway': shot['colorway'],
+                  'scene': shot['scene'], 'seed': seed})
+    subprocess.run([PY, 'tools/report.py'], cwd=ROOT, capture_output=True)
+if shots:
+    json.dump(shots, open(os.path.join(ROOT, 'runs', pid, 'shots.json'), 'w'), indent=2)
+
 step('report', [PY, 'tools/report.py'])
 print(f'\nDone: {len(plan["pieces"])} pieces in {layout_dir}')

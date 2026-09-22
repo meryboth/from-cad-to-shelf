@@ -121,8 +121,8 @@ def local_sdxl(passes, view, colorway, scene, spec, seed):
     depth = upload(Image.open(os.path.join(d, 'depth.png')).convert('RGB'), f'{spec["name"]}_{view}_depth.png')
     normal = upload(Image.open(os.path.join(d, 'normal.png')).convert('RGB'), f'{spec["name"]}_{view}_normal.png')
     start = upload(on_grey(os.path.join(d, f'beauty_{colorway}.png')), f'{spec["name"]}_{view}_{colorway}.png')
-    pos = f"professional product photograph of a {describe(spec, colorway)}, {scene['prompt']}, photorealistic, sharp focus, high detail"
-    neg = 'cartoon, illustration, 3d render, cgi, plastic toy, deformed, extra buttons, text, watermark, blurry, lowres'
+    pos = scene['prompt_template'].format(product=describe(spec, colorway)) if scene.get('prompt_template') else         f"professional product photograph of a {describe(spec, colorway)}, {scene['prompt']}, photorealistic, sharp focus, high detail"
+    neg = scene.get('negative', 'cartoon, illustration, 3d render, cgi, plastic toy, deformed, extra buttons, text, watermark, blurry, lowres')
     g = {
         'ckpt': {'class_type': 'CheckpointLoaderSimple', 'inputs': {'ckpt_name': 'RealVisXL_V5.0_fp16.safetensors'}},
         'pos': {'class_type': 'CLIPTextEncode', 'inputs': {'text': pos, 'clip': ['ckpt', 1]}},
@@ -204,14 +204,20 @@ if __name__ == '__main__':
     raw = img
     if backend == 'local-sdxl' and '--no-lock' not in args:
         img = finish(img, passes, view, colorway, spec)
-    out = os.path.join(os.path.dirname(os.path.abspath(passes)), 'generate', backend)
+    if opt('--out'):  # an explicit path, for shots that live outside the generate folder
+        out, name = os.path.dirname(os.path.abspath(opt('--out'))), os.path.basename(opt('--out'))[:-4]
+    else:
+        out = os.path.join(os.path.dirname(os.path.abspath(passes)), 'generate', backend)
+        name = f'{view}_{scene_id}_{colorway}_s{seed}' + (f"_{opt('--format')}" if opt('--format') else '')
     os.makedirs(out, exist_ok=True)
-    name = f'{view}_{scene_id}_{colorway}_s{seed}' + (f"_{opt('--format')}" if opt('--format') else '')
     img.save(os.path.join(out, name + '.png'))
     if img is not raw:
         raw.save(os.path.join(out, name + '_raw.png'))  # before the lock, to compare
-    record = {'backend': backend, 'view': view, 'colorway': colorway, 'scene': scene_id, 'seed': seed, 'format': opt('--format'), 'seconds': seconds,
-              'usd': PRICES[backend], 'prompt': prompt, 'file': f'{backend}/{name}.png', 'at': time.strftime('%Y-%m-%d %H:%M:%S')}
-    with open(os.path.join(os.path.dirname(out), 'ledger.jsonl'), 'a', encoding='utf-8') as f:
+    ledger = os.path.join(os.path.dirname(os.path.abspath(passes)), 'generate', 'ledger.jsonl')
+    os.makedirs(os.path.dirname(ledger), exist_ok=True)
+    record = {'backend': backend, 'view': view, 'colorway': colorway, 'scene': scene_id, 'seed': seed,
+              'format': opt('--format'), 'shot': bool(opt('--out')), 'seconds': seconds,
+              'usd': PRICES[backend], 'prompt': prompt, 'file': os.path.relpath(os.path.join(out, name + '.png'), os.path.dirname(ledger)).replace(os.sep, '/'), 'at': time.strftime('%Y-%m-%d %H:%M:%S')}
+    with open(ledger, 'a', encoding='utf-8') as f:
         f.write(json.dumps(record) + '\n')
     print(json.dumps({k: record[k] for k in ('file', 'seconds', 'usd')}))

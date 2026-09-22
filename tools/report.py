@@ -34,7 +34,8 @@ def generations(pid):
         return ''
     recs = [json.loads(l) for l in open(ledger, encoding='utf-8') if l.strip()]
     latest = {}
-    for r in [r for r in recs if not r.get('format')]:  # the model comparison: the newest image per backend and combination
+    for r in [r for r in recs if not r.get('format') and not r.get('shot')
+              and os.path.exists(os.path.join(RUNS, pid, 'passes', r['view'], f"beauty_{r['colorway']}.png"))]:
         latest[(r['view'], r['scene'], r['colorway'], r['backend'])] = r
     combos = sorted({k[:3] for k in latest})
     backends = [b for b in BACKENDS if any(k[3] == b for k in latest)]
@@ -83,6 +84,16 @@ def consistency(pid):
     return (f'<h3>Stage 3b · Consistency <small>each part takes its colour from the spec in every view; the numbers are how '
             f'far apart the views are, as delta E (consistent under 6)</small></h3>'
             f'<div class="scroll"><table class="grid qa"><tbody>{rows}</tbody></table></div>')
+
+
+def shots(pid):
+    path = os.path.join(RUNS, pid, 'shots.json')
+    if not os.path.exists(path):
+        return ''
+    figs = ''.join(f'<figure><img class="piece" loading="lazy" src="{os.path.relpath(os.path.join(ROOT, sh["file"]), RUNS).replace(os.sep, "/")}"'
+                   f' alt="{e(sh["framing"])} {e(sh["colorway"])}"><figcaption>{e(sh["framing"])} · {e(sh["colorway"])}</figcaption></figure>'
+                   for sh in json.load(open(path)))
+    return f'<h3>Stage 6 · Lifestyle shots <small>the product in a pair of hands, from its own framing</small></h3><div class="pieces">{figs}</div>'
 
 
 def layouts(pid):
@@ -139,6 +150,7 @@ def product_section(pid):
   {generations(pid)}
   {consistency(pid)}
   {routing(pid)}
+  {shots(pid)}
   {layouts(pid)}
 </section>'''
 

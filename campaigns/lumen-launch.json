@@ -57,5 +57,37 @@
       "tagline": "Play it slow."
     }
   ],
-  "seed": 11
+  "seed": 11,
+  "shots": [
+    {
+      "framing": "held",
+      "scene": "held",
+      "colorway": "signal-orange",
+      "seed": 7
+    },
+    {
+      "framing": "held",
+      "scene": "held",
+      "colorway": "white",
+      "seed": 41
+    },
+    {
+      "framing": "held-close",
+      "scene": "held",
+      "colorway": "signal-orange",
+      "seed": 52
+    }
+  ],
+  "framings": {
+    "held": {
+      "views": "held=0,24",
+      "fill": 0.5,
+      "format": "portrait"
+    },
+    "held-close": {
+      "views": "held=-22,16",
+      "fill": 0.62,
+      "format": "square"
+    }
+  }
 }

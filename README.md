@@ -75,6 +75,16 @@ Colorways, in the meridian palette: `white`, and `signal-orange` in the brand's 
 (1 body, 2 screen, 3 controls, 4 cartridge, 5 internals) for the product masks later on.
 
 
+## A campaign in one command
+
+```bash
+py pipeline/run.py campaigns/lumen-launch.json
+```
+
+The campaign file lists the pieces (template, format, view, colorway, tagline) and the lifestyle shots with their own
+framings. The runner does passes -> generate -> consistency -> route -> layout -> shots -> report, reuses whatever is
+already there, regenerates with a new seed when the routing says so, and writes `runs/<product>/index.html`.
+
 ## Consistency
 
 Every view is generated on its own, so a model is free to invent a different d-pad each time. Three things stop it,
