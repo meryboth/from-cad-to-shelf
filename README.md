@@ -40,7 +40,7 @@ Textured materials work too: a colorway tints the texture instead of replacing i
 (a 3D viewer of the GLB, its spec and colorways) and every pass, per view and colorway. Serve the repo root with
 `py -m http.server 5190` and open http://localhost:5190/runs/.
 
-## Two products, one pipeline
+## The test product
 
 The same code, only the product folder changes. Rows are views; columns are the beauty per colorway, depth, normals,
 mask and protected-parts mask.
@@ -48,11 +48,6 @@ mask and protected-parts mask.
 **LUMEN**, built for this project:
 
 ![LUMEN passes](docs/img/lumen-passes.jpg)
-
-**BoomBox**, a third-party model ([Khronos glTF Sample Assets](https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/BoomBox), CC0),
-one textured material at 2 cm in its file, rescaled and framed with no changes to the pipeline:
-
-![BoomBox passes](docs/img/boombox-passes.jpg)
 
 The control passes render with EEVEE, in seconds. The beauty renders use Cycles on the GPU (OptiX when there is one), with
 Blender's bundled studio HDRI for reflections, a shadow-catcher floor for the contact shadow, soft area lights scaled to

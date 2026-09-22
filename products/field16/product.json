@@ -1,0 +1,99 @@
+{
+  "name": "FIELD 16",
+  "code": "C-16",
+  "year": "2026",
+  "category": "compact digital camera",
+  "fictional": true,
+  "size_mm": [
+    92,
+    52,
+    30
+  ],
+  "facts": [
+    "A pocket camera with a fixed lens and an optical viewfinder",
+    "A ribbed control dial on the front",
+    "A coloured band across the top with two buttons",
+    "A strap lug on the right side",
+    "Two colorways: White and Signal Orange"
+  ],
+  "hero_material": "body",
+  "protected_materials": [
+    "window",
+    "lens",
+    "lens_ring",
+    "finder",
+    "glass",
+    "wordmark",
+    "cap",
+    "dark"
+  ],
+  "exact_materials": [
+    "glass",
+    "lens",
+    "wordmark"
+  ],
+  "colorways": {
+    "white": {
+      "body": {
+        "color": [
+          0.8469,
+          0.8308,
+          0.807
+        ],
+        "roughness": 0.4
+      },
+      "band": {
+        "color": [
+          1.0,
+          0.1119,
+          0.0252
+        ]
+      },
+      "dial": {
+        "color": [
+          0.0103,
+          0.0103,
+          0.0116
+        ]
+      },
+      "cap": {
+        "color": [
+          0.5776,
+          0.3613,
+          0.0685
+        ]
+      }
+    },
+    "signal-orange": {
+      "body": {
+        "color": [
+          1.0,
+          0.1119,
+          0.0252
+        ],
+        "roughness": 0.42
+      },
+      "band": {
+        "color": [
+          0.8469,
+          0.8308,
+          0.807
+        ]
+      },
+      "dial": {
+        "color": [
+          0.0103,
+          0.0103,
+          0.0116
+        ]
+      },
+      "cap": {
+        "color": [
+          0.956,
+          0.956,
+          0.9387
+        ]
+      }
+    }
+  }
+}
