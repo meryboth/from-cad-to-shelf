@@ -80,14 +80,10 @@ json.dump(cons, open(os.path.join(ROOT, 'runs', pid, 'consistency.json'), 'w'), 
 layout_dir = os.path.join('runs', pid, 'layout', os.path.basename(plan.get('slug', args[0]))[:-5])
 for p in plan['pieces']:
     img = lambda v: chosen[(v, p['colorway'])]
-    composed = p['template'] == 'auto'  # a sampled layout instead of a fixed template
-    cmd = [PY, 'pipeline/compose.py' if composed else 'pipeline/layout.py', brand, product, layout_dir,
-           '--format', p['format']] + ([] if composed else ['--template', p['template']]) + [
+    cmd = [PY, 'pipeline/layout.py', brand, product, layout_dir, '--template', p['template'], '--format', p['format'],
            '--image', img(p['view']), '--mask', os.path.join(passes, p['view'], 'mask.png'),
            '--colorway', p['colorway'], '--tagline', p['tagline'],
-           '--name', f"{p['template']}-{p['format']}-{p['colorway']}-{p.get('seed', 7)}"]
-    if composed:
-        cmd += ['--seed', str(p.get('seed', 7))] + (['--archetype', p['archetype']] if p.get('archetype') else [])
+           '--name', f"{p['template']}-{p['format']}-{p['colorway']}"]
     if p.get('view2'):
         cmd += ['--image2', img(p['view2']), '--mask2', os.path.join(passes, p['view2'], 'mask.png')]
     step(f"layout {p['template']} {p['format']} {p['colorway']}", cmd)

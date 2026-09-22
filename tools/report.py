@@ -14,13 +14,12 @@ THUMBS = os.path.join(RUNS, '_thumbs')
 e = html.escape
 
 STAGES = [
-    ('0', 'Style', 'A moodboard in: palette, light, composition and type are measured, and a brand and a campaign come out.'),
     ('1', 'Passes', 'Depth, normals, masks, a parts map and a studio reference per view and colorway, from any product.'),
     ('2', 'Plan', 'A campaign file lists the pieces: template or sampled layout, format, view, colorway, scene.'),
     ('3', 'Generate', 'A ComfyUI graph turns the passes into photoreal images, locally or through a paid model.'),
     ('3b', 'Consistency', 'Every part takes its spec colour and tone in every view; fine detail comes from the render.'),
     ('4', 'Route', 'Colour and parts are checked per photo: publish, review, or regenerate with a new seed.'),
-    ('5', 'Compose', 'Layouts are sampled on a measured grid, biased by the references, scored and picked.'),
+    ('5', 'Layout', 'The brand on top: real type, colours and logo, in the poster, spread and spec-sheet templates.'),
     ('6', 'Report', 'This page: every input, photo, verdict and piece, campaign by campaign.'),
 ]
 
@@ -153,7 +152,7 @@ def campaign(path):
   <h3>2 · Photos <small>generated from the passes of each view, then checked · drift between views: {drift or "—"}</small></h3>
   <div class="pieces small">{photos}</div>
 
-  <h3>3 · Pieces <small>type, colour and logo from the brand; layouts sampled where the plan says auto</small></h3>
+  <h3>3 · Pieces <small>type, colour and logo set from the brand file</small></h3>
   <div class="pieces">{piece_figs}</div>
 </section>'''
 

@@ -75,35 +75,15 @@ Colorways, in the meridian palette: `white`, and `signal-orange` in the brand's 
 (1 body, 2 screen, 3 controls, 4 cartridge, 5 internals) for the product masks later on.
 
 
-## Two inputs
-
-A product, and a look:
-
-| Input | What it is | What it decides |
-|---|---|---|
-| `products/<name>/` | `product.glb` + `product.json` | shape, materials, colorways, protected parts, facts for the copy |
-| `references/<name>/` | a folder of reference images | palette, light, composition, type, which templates and in what order |
-
-```bash
-py pipeline/style.py references/my-moodboard --name mybrand --product products/lumen
-py pipeline/run.py campaigns/mybrand.json
-```
-
-The first reads the moodboard and writes `brands/mybrand/` and `campaigns/mybrand.json`. The second produces the
-pieces. Nothing is written by hand, and nothing is asked of a paid model: the style stage measures the references
-(k-means palette in Lab, brightness, contrast and warmth, where the content sits and how much air is left, how many
-straight rules there are) and turns those measurements into the brand and the plan. Reference images stay out of the
-repo: they are usually someone else's work.
-
 ## A campaign in one command
 
 ```bash
 py pipeline/run.py campaigns/lumen-launch.json
 ```
 
-The campaign file lists the pieces (template, format, view, colorway, tagline) and the lifestyle shots with their own
-framings. The runner does passes -> generate -> consistency -> route -> layout -> shots -> report, reuses whatever is
-already there, regenerates with a new seed when the routing says so, and writes `runs/<product>/index.html`.
+The campaign file lists the pieces: template, format, view, colorway and tagline. The runner does
+passes -> generate -> consistency -> route -> layout -> report, reuses whatever is already there, regenerates with a
+new seed when the routing says so, and writes `runs/index.html`.
 
 ## Consistency
 
