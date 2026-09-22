@@ -24,6 +24,34 @@ def rgb(c):
     return 'rgb(%d,%d,%d)' % tuple(round(max(0, min(1, v)) ** (1 / 2.2) * 255) for v in c)  # linear -> screen
 
 
+BACKENDS = ['local-sdxl', 'nano-banana', 'nano-banana-2', 'nano-banana-pro']
+
+
+def generations(pid):
+    ledger = os.path.join(RUNS, pid, 'generate', 'ledger.jsonl')
+    if not os.path.exists(ledger):
+        return ''
+    recs = [json.loads(l) for l in open(ledger, encoding='utf-8') if l.strip()]
+    latest = {}
+    for r in recs:  # the newest image per backend and combination
+        latest[(r['view'], r['scene'], r['colorway'], r['backend'])] = r
+    combos = sorted({k[:3] for k in latest})
+    backends = [b for b in BACKENDS if any(k[3] == b for k in latest)]
+    head = '<th>Reference</th>' + ''.join(f'<th>{e(b)}</th>' for b in backends)
+    rows = ''
+    for v, sc, cw in combos:
+        cells = f'<td class="beauty"><img loading="lazy" src="{pid}/passes/{v}/beauty_{cw}.png" alt="reference {e(v)} {e(cw)}"></td>'
+        for b in backends:
+            r = latest.get((v, sc, cw, b))
+            cells += (f'<td class="gen"><img loading="lazy" src="{pid}/generate/{r["file"]}" alt="{e(b)} · {e(sc)} · {e(cw)} · {r["seconds"]} s · ${r["usd"]}">'
+                      f'<small>{r["seconds"]} s · ${r["usd"]:.3f}</small></td>') if r else '<td></td>'
+        rows += f'<tr><th class="view">{e(sc)}<small>{e(v)} · {e(cw)}</small></th>{cells}</tr>'
+    spent = sum(r['usd'] for r in recs)
+    return (f'<h3>Stage 3 · Generate <small>same view, scene and colorway across models · {len(recs)} images · '
+            f'US$ {spent:.2f} spent so far</small></h3><div class="scroll"><table class="grid gen">'
+            f'<thead><tr><th></th>{head}</tr></thead><tbody>{rows}</tbody></table></div>')
+
+
 def layouts(pid):
     d = os.path.join(RUNS, pid, 'layout')
     files = sorted(f for f in os.listdir(d) if f.endswith('.png')) if os.path.isdir(d) else []
@@ -74,6 +102,7 @@ def product_section(pid):
   </div>
   <h3>Stage 1 · Passes <small>click any image to enlarge</small></h3>
   {grid}
+  {generations(pid)}
   {layouts(pid)}
 </section>'''
 
@@ -119,6 +148,7 @@ page = f'''<!doctype html>
   .grid img {{ width: 150px; height: 150px; object-fit: contain; border-radius: 8px; cursor: zoom-in; display: block; }}
   .grid td.beauty img {{ background: #e6e3dd; }} .grid td.pass img {{ background: #000; }}
   .empty {{ color: var(--soft); }}
+  .grid.gen img {{ width: 260px; height: 260px; object-fit: cover; }} .grid td.gen small {{ display: block; font-size: 11px; color: var(--soft); text-align: center; }}
   .pieces {{ display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }} .pieces figure {{ margin: 0; }}
   .pieces img {{ height: 300px; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,.08); cursor: zoom-in; display: block; }}
   .pieces figcaption {{ font-size: 12px; color: var(--soft); margin-top: 6px; }}

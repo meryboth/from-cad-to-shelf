@@ -1,0 +1,10 @@
+{
+  "desk-sunset": {
+    "label": "Desk at sunset",
+    "prompt": "standing on a warm oak desk by a window at golden hour, low sunset light raking across the desk, a mug and a paperback softly out of focus behind, cozy analog mood, shallow depth of field"
+  },
+  "studio-sphere": {
+    "label": "Studio sphere",
+    "prompt": "on a seamless cream studio backdrop, a large soft sphere behind it with a gradient from sage green to coral, soft diffused light, a gentle contact shadow, minimal campaign look"
+  }
+}
