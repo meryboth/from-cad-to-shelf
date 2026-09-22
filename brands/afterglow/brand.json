@@ -1,0 +1,21 @@
+{
+  "name": "Afterglow",
+  "fictional": true,
+  "tone": "Warm, unhurried, analog. Games as a slow ritual, not a race.",
+  "colors": {
+    "cream": "#F3EDE2",
+    "coral": "#E8664A",
+    "ink": "#1E1B2E",
+    "sage": "#9DB8A0"
+  },
+  "fonts": {
+    "display": ["fonts/Outfit-SemiBold.ttf", "C:/Windows/Fonts/seguisb.ttf", "DejaVuSans-Bold.ttf"],
+    "text": ["fonts/Outfit-Regular.ttf", "C:/Windows/Fonts/segoeui.ttf", "DejaVuSans.ttf"]
+  },
+  "logo": {"text": "afterglow", "mark": "half-sun"},
+  "taglines": ["Play it slow.", "Made to be played.", "The glow stays on."],
+  "templates": {
+    "split": {"background": "cream", "title": "coral", "tagline": "ink", "logo": "ink"},
+    "centered": {"background": "cream", "backdrop": ["sage", "coral"], "title": "cream", "tagline": "cream", "logo": "cream"}
+  }
+}

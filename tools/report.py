@@ -11,9 +11,10 @@ STAGES = [
     ('1', 'Passes', 'Depth, normals, masks and a studio reference per view and colorway, from any product.'),
     ('2', 'Plan', 'Jev picks scenes, moods and formats from the brief, each with a probability.'),
     ('3', 'Generate', 'A ComfyUI graph turns the passes and the plan into photoreal images.'),
-    ('4', 'Route', 'Jev decides per image: publish, human review or regenerate, by confidence.'),
-    ('5', 'Copy', 'Text from the spec sheet only, so it cannot invent a fact.'),
-    ('6', 'Report', 'Cost per approved asset, calibration, latency.'),
+    ('4', 'Layout', 'The brand on top: real type, colours and logo, per template and format.'),
+    ('5', 'Route', 'Jev decides per piece: publish, human review or regenerate, by confidence.'),
+    ('6', 'Copy', 'Text from the spec sheet only, so it cannot invent a fact.'),
+    ('7', 'Report', 'Cost per approved asset, calibration, latency.'),
 ]
 PASSES = [('depth', 'Depth'), ('normal', 'Normals'), ('mask', 'Mask'), ('mask_protected', 'Protected parts')]
 e = html.escape
@@ -21,6 +22,15 @@ e = html.escape
 
 def rgb(c):
     return 'rgb(%d,%d,%d)' % tuple(round(max(0, min(1, v)) ** (1 / 2.2) * 255) for v in c)  # linear -> screen
+
+
+def layouts(pid):
+    d = os.path.join(RUNS, pid, 'layout')
+    files = sorted(f for f in os.listdir(d) if f.endswith('.png')) if os.path.isdir(d) else []
+    if not files:
+        return ''
+    figs = ''.join(f'<figure><img class="piece" loading="lazy" src="{pid}/layout/{f}" alt="{e(f[:-4])}"><figcaption>{e(f[:-4])}</figcaption></figure>' for f in files)
+    return f'<h3>Stage 4 · Layout <small>prototype: the product image is still the studio reference, until ComfyUI renders it</small></h3><div class="pieces">{figs}</div>'
 
 
 def product_section(pid):
@@ -64,6 +74,7 @@ def product_section(pid):
   </div>
   <h3>Stage 1 · Passes <small>click any image to enlarge</small></h3>
   {grid}
+  {layouts(pid)}
 </section>'''
 
 
@@ -71,6 +82,7 @@ products = [p for p in os.listdir(os.path.join(ROOT, 'products')) if os.path.exi
 # our own products first, then third-party ones
 products.sort(key=lambda p: ('source' in json.load(open(os.path.join(ROOT, 'products', p, 'product.json'), encoding='utf-8')), p))
 done = {'1': any(os.path.exists(os.path.join(RUNS, p, 'passes', 'manifest.json')) for p in products)}
+# layout counts as started, not done, until it runs on generated images
 stages = ''.join(f'<li class="{"done" if done.get(n) else ""}"><b>{n}</b><span><strong>{e(t)}</strong>{e(d)}</span></li>' for n, t, d in STAGES)
 nav = ''.join(f'<a href="#{p}">{e(p)}</a>' for p in products)
 page = f'''<!doctype html>
@@ -107,6 +119,9 @@ page = f'''<!doctype html>
   .grid img {{ width: 150px; height: 150px; object-fit: contain; border-radius: 8px; cursor: zoom-in; display: block; }}
   .grid td.beauty img {{ background: #e6e3dd; }} .grid td.pass img {{ background: #000; }}
   .empty {{ color: var(--soft); }}
+  .pieces {{ display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }} .pieces figure {{ margin: 0; }}
+  .pieces img {{ height: 300px; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,.08); cursor: zoom-in; display: block; }}
+  .pieces figcaption {{ font-size: 12px; color: var(--soft); margin-top: 6px; }}
   #box {{ position: fixed; inset: 0; background: rgba(20,22,30,.88); display: none; place-items: center; z-index: 9; cursor: zoom-out; }}
   #box.on {{ display: grid; }} #box img {{ max-width: 94vw; max-height: 90vh; background: #e6e3dd; border-radius: 10px; }}
   #box p {{ position: fixed; bottom: 14px; left: 0; right: 0; text-align: center; color: #fff; margin: 0; }}
@@ -123,7 +138,7 @@ page = f'''<!doctype html>
 <script>
   const box = document.querySelector('#box');
   document.addEventListener('click', (ev) => {{
-    const img = ev.target.closest('.grid img');
+    const img = ev.target.closest('.grid img, .pieces img');
     if (img) {{ box.querySelector('img').src = img.src; box.querySelector('p').textContent = img.alt; box.classList.add('on'); }}
     else if (ev.target.closest('#box')) box.classList.remove('on');
   }});
