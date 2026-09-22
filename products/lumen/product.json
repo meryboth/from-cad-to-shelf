@@ -158,5 +158,6 @@
   "exact_materials": [
     "screen",
     "bezel"
-  ]
+  ],
+  "hero_material": "body"
 }

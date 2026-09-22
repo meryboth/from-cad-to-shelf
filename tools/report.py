@@ -9,12 +9,12 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RUNS = os.path.join(ROOT, 'runs')
 STAGES = [
     ('1', 'Passes', 'Depth, normals, masks and a studio reference per view and colorway, from any product.'),
-    ('2', 'Plan', 'Jev picks scenes, moods and formats from the brief, each with a probability.'),
+    ('2', 'Plan', 'A campaign file lists the pieces: template, format, view, colorway, scene. Jev will propose it later.'),
     ('3', 'Generate', 'A ComfyUI graph turns the passes and the plan into photoreal images.'),
     ('4', 'Layout', 'The brand on top: real type, colours and logo, per template and format.'),
-    ('5', 'Route', 'Jev decides per piece: publish, human review or regenerate, by confidence.'),
-    ('6', 'Copy', 'Text from the spec sheet only, so it cannot invent a fact.'),
-    ('7', 'Report', 'Cost per approved asset, calibration, latency.'),
+    ('5', 'Route', 'Colour and parts checked per photo: publish, review, or regenerate with a new seed. Jev later.'),
+    ('6', 'Copy', 'Type and copy from the brand file and the product facts, never generated.'),
+    ('7', 'Report', 'This page: every input, pass, photo, verdict and piece of every run.'),
 ]
 PASSES = [('depth', 'Depth'), ('normal', 'Normals'), ('mask', 'Mask'), ('mask_protected', 'Protected parts')]
 e = html.escape
@@ -50,6 +50,21 @@ def generations(pid):
     return (f'<h3>Stage 3 · Generate <small>same view, scene and colorway across models · {len(recs)} images · '
             f'US$ {spent:.2f} spent so far</small></h3><div class="scroll"><table class="grid gen">'
             f'<thead><tr><th></th>{head}</tr></thead><tbody>{rows}</tbody></table></div>')
+
+
+def routing(pid):
+    path = os.path.join(RUNS, pid, 'qa.json')
+    if not os.path.exists(path):
+        return ''
+    qa = json.load(open(path))
+    rows = ''.join(
+        f'<tr><td><img loading="lazy" src="{os.path.relpath(os.path.join(ROOT, k), RUNS).replace(os.sep, "/")}" alt="{e(os.path.basename(k))}"></td>'
+        f'<td>{e(r["view"])}</td><td>{e(r["colorway"])}</td><td>{r.get("seed", "")}</td><td>{r["delta_e"]["colour"]}</td>'
+        f'<td>{r["delta_e"]["parts"]}</td><td><span class="verdict {r["verdict"]}">{r["verdict"]}</span></td></tr>'
+        for k, r in sorted(qa.items()))
+    return (f'<h3>Stage 5 · Route <small>colour vs the spec (hue and chroma) and protected parts vs the reference, as delta E; '
+            f'publish under 5, regenerate over 10</small></h3><div class="scroll"><table class="grid qa"><thead><tr><th>Photo</th><th>View</th>'
+            f'<th>Colorway</th><th>Seed</th><th>Colour ΔE</th><th>Parts ΔE</th><th>Verdict</th></tr></thead><tbody>{rows}</tbody></table></div>')
 
 
 def layouts(pid):
@@ -104,6 +119,7 @@ def product_section(pid):
   <h3>Stage 1 · Passes <small>click any image to enlarge</small></h3>
   {grid}
   {generations(pid)}
+  {routing(pid)}
   {layouts(pid)}
 </section>'''
 
@@ -111,7 +127,9 @@ def product_section(pid):
 products = [p for p in os.listdir(os.path.join(ROOT, 'products')) if os.path.exists(os.path.join(ROOT, 'products', p, 'product.json'))]
 # our own products first, then third-party ones
 products.sort(key=lambda p: ('source' in json.load(open(os.path.join(ROOT, 'products', p, 'product.json'), encoding='utf-8')), p))
-done = {'1': any(os.path.exists(os.path.join(RUNS, p, 'passes', 'manifest.json')) for p in products)}
+has = lambda *parts: any(os.path.exists(os.path.join(RUNS, p, *parts)) for p in products)
+done = {'1': has('passes', 'manifest.json'), '2': os.path.isdir(os.path.join(ROOT, 'campaigns')), '3': has('generate'),
+        '4': has('layout'), '5': has('qa.json'), '6': has('layout'), '7': True}
 # layout counts as started, not done, until it runs on generated images
 stages = ''.join(f'<li class="{"done" if done.get(n) else ""}"><b>{n}</b><span><strong>{e(t)}</strong>{e(d)}</span></li>' for n, t, d in STAGES)
 nav = ''.join(f'<a href="#{p}">{e(p)}</a>' for p in products)
@@ -149,6 +167,10 @@ page = f'''<!doctype html>
   .grid img {{ width: 150px; height: 150px; object-fit: contain; border-radius: 8px; cursor: zoom-in; display: block; }}
   .grid td.beauty img {{ background: #e6e3dd; }} .grid td.pass img {{ background: #000; }}
   .empty {{ color: var(--soft); }}
+  .grid.qa img {{ width: 110px; height: 110px; object-fit: cover; }} .grid.qa td {{ text-align: center; font-size: 13px; }}
+  .verdict {{ padding: 3px 10px; border-radius: 99px; font-weight: 600; font-size: 12px; }}
+  .verdict.publish {{ background: #dff0e2; color: #2d6a3b; }} .verdict.review {{ background: #fdf0d5; color: #8a5a00; }}
+  .verdict.regenerate {{ background: #fbe0da; color: #9b2c16; }}
   .grid.gen img {{ width: 260px; height: 260px; object-fit: cover; }} .grid td.gen small {{ display: block; font-size: 11px; color: var(--soft); text-align: center; }}
   .pieces {{ display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }} .pieces figure {{ margin: 0; }}
   .pieces img {{ height: 300px; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,.08); cursor: zoom-in; display: block; }}

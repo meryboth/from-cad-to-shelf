@@ -77,7 +77,7 @@ def describe(spec, colorway):
     return f"{spec.get('category', 'product')} called {spec['name']}, {colorway.replace('-', ' ')} colorway"
 
 
-def lock_protected(img, passes, view, colorway, light=0.35, feather=1.5):
+def lock_protected(img, passes, view, colorway, light=0.2, feather=1.5):
     """Bring the protected parts back from the reference, after generation. Two kinds:
     exact parts (mask_exact: a screen, a logo) are copied as they are; the other protected parts keep the reference's
     colour but take `light` of their lightness from the photo, so they get its light and texture instead of looking
