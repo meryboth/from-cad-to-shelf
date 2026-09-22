@@ -5,7 +5,7 @@
 #   parts   the protected parts, compared with the reference after the lock (they should be near identical)
 # and decides: publish, review or regenerate. Jev takes this decision over later, with probabilities;
 # these measurements stay as its inputs.
-# Usage: py pipeline/qa.py <passes dir> <generated image> <colorway> [<product dir>]   -> prints a JSON verdict
+# Usage: py pipeline/qa.py <passes dir> <raw image> <colorway> [<product dir>] [<finished image>] -> a JSON verdict
 import json
 import os
 import sys
@@ -53,7 +53,7 @@ def chroma_delta(a, b):
     return float(np.sqrt((dc / (1 + 0.045 * c2)) ** 2 + dh2 / (1 + 0.015 * c2) ** 2))
 
 
-def check(passes, image, colorway, spec=None):
+def check(passes, image, colorway, spec=None, final=None):
     view = os.path.basename(image).split('_')[0]
     d = os.path.join(passes, view)
     gen = Image.open(image).convert('RGB')
@@ -65,7 +65,9 @@ def check(passes, image, colorway, spec=None):
     hero = (spec or {}).get('hero_material')
     target = spec_lab(spec['colorways'][colorway][hero]['color']) if hero else np.median(r[body], 0)
     colour = chroma_delta(np.median(g[body], 0), target)
-    parts_de = float(np.linalg.norm(np.median(g[parts], 0) - np.median(r[parts], 0))) if parts.any() else 0.0
+    # the protected parts are judged on the finished photo, after they have been put back
+    p = lab(Image.open(final).convert('RGB').resize(gen.size)) if final else g
+    parts_de = float(np.linalg.norm(np.median(p[parts], 0) - np.median(r[parts], 0))) if parts.any() else 0.0
     scores = {'colour': round(colour, 1), 'parts': round(parts_de, 1)}
     verdict = 'publish'
     for k, v in scores.items():
@@ -80,4 +82,5 @@ def check(passes, image, colorway, spec=None):
 if __name__ == '__main__':
     product = sys.argv[4] if len(sys.argv) > 4 else None
     spec = json.load(open(os.path.join(product, 'product.json'), encoding='utf-8')) if product else None
-    print(json.dumps(check(*sys.argv[1:4], spec)))
+    final = sys.argv[5] if len(sys.argv) > 5 else None
+    print(json.dumps(check(*sys.argv[1:4], spec, final)))

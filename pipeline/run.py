@@ -57,7 +57,7 @@ for v, cw in needed:
         # judge what the model produced, before the consistency stage corrects it: that is where drift shows
         raw = out.replace('.png', '_raw.png')
         judged = raw if os.path.exists(os.path.join(ROOT, raw)) else out
-        verdict = json.loads(step(f'qa {v} {cw} seed {seed}', [PY, 'pipeline/qa.py', passes, judged, cw, product]))
+        verdict = json.loads(step(f'qa {v} {cw} seed {seed}', [PY, 'pipeline/qa.py', passes, judged, cw, product, out]))
         verdict['seed'] = seed
         qa[out.replace(os.sep, '/')] = verdict
         chosen[(v, cw)] = out
