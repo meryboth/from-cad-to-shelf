@@ -109,12 +109,77 @@ def material(name, color, rough=0.45, emit=0.0, clear=False, metal=0.0):
     return m
 
 
+# ---------- the screen: a dot-matrix boot screen, drawn from code ----------
+FONT = {  # 5 x 7 pixel letters
+    'L': ['10000'] * 6 + ['11111'], 'U': ['10001'] * 6 + ['01110'], 'M': ['10001', '11011', '10101', '10001', '10001', '10001', '10001'],
+    'E': ['11111', '10000', '10000', '11110', '10000', '10000', '11111'], 'N': ['10001', '11001', '10101', '10011', '10001', '10001', '10001'],
+}
+
+
+def boot_screen(tint):
+    """160 x 144 pixels, like the handhelds it nods to: the wordmark, a sun and hills."""
+    w, h = 160, 144
+    px = [[0.0] * w for _ in range(h)]  # 0 = background, 1 = mid, 2 = dark
+    x = 40
+    for ch in 'LUMEN':
+        for r, row in enumerate(FONT[ch]):
+            for col, bit in enumerate(row):
+                if bit == '1':
+                    for dy in range(2):
+                        for dx in range(2):
+                            px[40 + r * 2 + dy][x + col * 2 + dx] = 2
+        x += 16
+    for yy in range(h):
+        for xx in range(w):
+            if (xx - 118) ** 2 + (yy - 78) ** 2 < 90:
+                px[yy][xx] = max(px[yy][xx], 1)
+            hill = 108 + 10 * math.sin(xx / 17) + 5 * math.sin(xx / 7 + 1)
+            if yy > hill:
+                px[yy][xx] = 2 if yy > hill + 16 else 1
+    levels = [[v * 1.0 for v in tint], [v * 0.62 for v in tint], [v * 0.25 for v in tint]]
+    img = bpy.data.images.new('lcd', w, h)
+    flat = []
+    for yy in range(h - 1, -1, -1):  # Blender images start at the bottom row
+        for xx in range(w):
+            flat += [*levels[int(px[yy][xx])], 1.0]
+    img.pixels = flat
+    img.filepath_raw = os.path.join(OUT, 'lcd.png')
+    img.file_format = 'PNG'
+    img.save()
+    img.pack()
+    return img
+
+
+def screen_material(tint):
+    m = material('screen', (1, 1, 1), 0.2)
+    nt = m.node_tree
+    tex = nt.nodes.new('ShaderNodeTexImage')
+    tex.image = boot_screen(tint)
+    tex.interpolation = 'Closest'  # crisp pixels
+    p = nt.nodes['Principled BSDF']
+    nt.links.new(tex.outputs['Color'], p.inputs['Base Color'])
+    nt.links.new(tex.outputs['Color'], p.inputs['Emission Color'])
+    p.inputs['Emission Strength'].default_value = 0.35
+    return m
+
+
+def planar_uv(ob):
+    """Front projection: the screen image lands flat on the display face."""
+    me = ob.data
+    uv = me.uv_layers.new(name='UVMap')
+    xs = [v.co.x for v in me.vertices]
+    zs = [v.co.z for v in me.vertices]
+    for loop in me.loops:
+        co = me.vertices[loop.vertex_index].co
+        uv.data[loop.index].uv = ((co.x - min(xs)) / (max(xs) - min(xs)), (co.z - min(zs)) / (max(zs) - min(zs)))
+
+
 # ---------- the console ----------
 def build(cw):
     c = COLORWAYS[cw]
     body = material('body', c['body'], c['rough'], clear=c['clear'])
     bezel = material('bezel', c['bezel'], 0.25)
-    screen = material('screen', c['screen'], 0.15, emit=0.6)
+    screen = screen_material(c['screen'])
     dpad = material('dpad', c['dpad'], 0.4)
     ab = material('ab', c['ab'], 0.3)
     pills = material('pills', c['pills'], 0.7)
@@ -140,6 +205,7 @@ def build(cw):
         if o.name == 'bezel':
             o.location.z = bz
     s = prism('screen', rounded_profile(0.050, 0.044, (0.0008,) * 4), -0.0013, 0.0004, screen, 0, 2)
+    planar_uv(s)
     s.location = (0.002, 0, bz + 0.002)
     cylinder('power_led', 0.0012, 0.0006, -0.031, -0.0014, bz + 0.008, led, 2, 0)
     bpy.ops.object.text_add(location=(-0.036, -0.0003, -0.0105), rotation=(math.radians(90), 0, 0))
@@ -248,6 +314,8 @@ def export_product(folder):
                 continue
             mats[mat] = {'color': list(c[key])}
         mats['body'].update(roughness=c['rough'], transmission=0.92 if c['clear'] else 0.0)
+        mats['screen'] = {'color': [1, 1, 1], 'roughness': 0.2, 'coat': 1.0}  # the LCD is a texture; a glass cover on top
+        mats['bezel'].update(coat=0.6)
         colorways[cw] = mats
     spec = {
         'name': 'LUMEN',

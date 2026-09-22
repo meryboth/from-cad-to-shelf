@@ -50,7 +50,11 @@ one textured material at 2 cm in its file, rescaled and framed with no changes t
 
 ![BoomBox passes](docs/img/boombox-passes.jpg)
 
-Known limit: the beauty renders use EEVEE for speed, so the Clear Smoke shell reads as opaque. The control passes are not affected.
+The control passes render with EEVEE, in seconds. The beauty renders use Cycles on the GPU (OptiX when there is one), with
+Blender's bundled studio HDRI for reflections, a shadow-catcher floor for the contact shadow, soft area lights scaled to
+the product, and a faint micro-surface bump on every material. `product.json` can tune it under `render`
+(`samples`, `light`, `hdri`, `hdri_strength`, `micro_surface`), and a colorway can add `coat` to any material.
+`--view <name>` renders one view, to iterate fast.
 
 ## The first test product: LUMEN
 

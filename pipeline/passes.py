@@ -13,6 +13,7 @@ from mathutils import Vector
 args = sys.argv[sys.argv.index('--') + 1:]
 PRODUCT, OUT = os.path.abspath(args[0]), os.path.abspath(args[1])
 QUICK = '--quick' in args
+ONLY = args[args.index('--view') + 1] if '--view' in args else None  # render one view, to iterate fast
 spec = json.load(open(os.path.join(PRODUCT, 'product.json'), encoding='utf-8'))
 os.makedirs(OUT, exist_ok=True)
 
@@ -117,11 +118,33 @@ def apply_colorway(cw):
                 nt.links.new(tint.outputs['Result'], base)
             tint.inputs['Factor'].default_value = props.get('tint_strength', 1.0)
             tint.inputs['B'].default_value = (*props.get('color', (1, 1, 1)), 1)
-        for key, socket in (('roughness', 'Roughness'), ('metallic', 'Metallic'), ('transmission', 'Transmission Weight')):
+        for key, socket in (('roughness', 'Roughness'), ('metallic', 'Metallic'), ('transmission', 'Transmission Weight'),
+                            ('coat', 'Coat Weight')):
             if key in props:
                 p.inputs[socket].default_value = props[key]
 
 
+RENDER = spec.get('render', {})
+
+
+def micro_surface(strength):
+    """A faint noise bump on every material without a normal map: real surfaces are never perfectly smooth."""
+    for m in {s.material for o in meshes for s in o.material_slots if s.material}:
+        nt = m.node_tree
+        p = nt.nodes.get('Principled BSDF')
+        if not p or p.inputs['Normal'].is_linked:
+            continue
+        tex = nt.nodes.new('ShaderNodeTexNoise')
+        tex.inputs['Scale'].default_value = 2500 / max(radius, 1e-3) * 0.05  # the grain follows the product size
+        tex.inputs['Detail'].default_value = 6
+        bump = nt.nodes.new('ShaderNodeBump')
+        bump.inputs['Strength'].default_value = strength
+        bump.inputs['Distance'].default_value = radius * 0.0004
+        nt.links.new(tex.outputs['Fac'], bump.inputs['Height'])
+        nt.links.new(bump.outputs['Normal'], p.inputs['Normal'])
+
+
+micro_surface(RENDER.get('micro_surface', 0.15))
 original = {o.name: [s.material for s in o.material_slots] for o in meshes}
 
 
@@ -149,18 +172,47 @@ def is_protected(o):
 
 # ---------- scene ----------
 sc = bpy.context.scene
-for engine in ('BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT'):
-    try:
-        sc.render.engine = engine
-        break
-    except TypeError:
-        pass
+EEVEE = next(e for e in ('BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT')
+             if e in [i.identifier for i in bpy.types.RenderSettings.bl_rna.properties['engine'].enum_items])
+
+
+def use_engine(engine):
+    sc.render.engine = engine
+    if engine == 'CYCLES':
+        sc.cycles.samples = RENDER.get('samples', 128)
+        sc.cycles.use_denoising = True
+        prefs = bpy.context.preferences.addons['cycles'].preferences
+        for kind in ('OPTIX', 'CUDA', 'HIP', 'METAL', 'ONEAPI'):  # the fastest GPU backend there is, else the CPU
+            try:
+                prefs.compute_device_type = kind
+                prefs.get_devices()
+                if any(d.type == kind for d in prefs.devices):
+                    for d in prefs.devices:
+                        d.use = d.type == kind
+                    sc.cycles.device = 'GPU'
+                    return
+            except TypeError:
+                pass
+        sc.cycles.device = 'CPU'
+
+
+use_engine(EEVEE)
 sc.render.resolution_x = sc.render.resolution_y = RES
 sc.render.image_settings.file_format = 'PNG'
 world = bpy.data.worlds.new('world')
 world.use_nodes = True
 bg = world.node_tree.nodes['Background']
 sc.world = world
+# a studio HDRI for reflections; Blender ships it, so every machine has the same one
+hdri = world.node_tree.nodes.new('ShaderNodeTexEnvironment')
+hdri.image = bpy.data.images.load(os.path.join(bpy.utils.system_resource('DATAFILES'), 'studiolights', 'world',
+                                               RENDER.get('hdri', 'studio.exr')))
+# the floor only catches shadows, so the beauty keeps its transparent background
+bpy.ops.mesh.primitive_plane_add(size=1)
+floor = bpy.context.object
+floor.scale = (radius * 30,) * 3
+floor.is_shadow_catcher = True
+floor.hide_render = True
 cam = bpy.data.objects.new('camera', bpy.data.cameras.new('camera'))
 sc.collection.objects.link(cam)
 sc.camera = cam
@@ -194,8 +246,8 @@ def lights(on):
         l = bpy.data.objects.new('light', bpy.data.lights.new('light', 'AREA'))
         sc.collection.objects.link(l)
         l.location = center + Vector(loc) * dist
-        l.data.size = radius * 2
-        l.data.energy = k * 12 * (Vector(loc) * dist).length ** 2  # same look at any product size
+        l.data.size = radius * 4  # big, soft sources: product light, not a torch
+        l.data.energy = k * RENDER.get('light', 2.5) * (Vector(loc) * dist).length ** 2  # same look at any size
         l.rotation_euler = (center - l.location).to_track_quat('-Z', 'Y').to_euler()
 
 
@@ -203,6 +255,14 @@ def render(path, transparent=False, view='Standard'):
     sc.render.film_transparent = transparent
     sc.render.image_settings.color_mode = 'RGBA' if transparent else 'RGB'
     sc.view_settings.view_transform = view
+    sc.view_settings.look = 'None'
+    if view == 'AgX':
+        for look in ('AgX - Medium High Contrast', 'Medium High Contrast'):
+            try:
+                sc.view_settings.look = look
+                break
+            except TypeError:
+                pass
     sc.render.filepath = path
     bpy.ops.render.render(write_still=True)
 
@@ -211,6 +271,8 @@ manifest = {'product': spec.get('name'), 'resolution': RES, 'lens_mm': LENS, 'ce
             'size_m': list(hi - lo), 'views': {}, 'colorways': list(spec['colorways'])}
 colorways = list(spec['colorways'])[:1] if QUICK else list(spec['colorways'])
 for view, (az, el) in VIEWS.items():
+    if ONLY and view != ONLY:
+        continue
     a, e = math.radians(az), math.radians(el)
     used = frame(Vector((math.sin(a) * math.cos(e), -math.cos(a) * math.cos(e), math.sin(e))))
     d = os.path.join(OUT, view)
@@ -231,13 +293,19 @@ for view, (az, el) in VIEWS.items():
         paint(fn)
         render(os.path.join(d, f'{name}.png'), view='Raw')  # data, not a picture: no tone mapping
         restore()
-    # beauty: the real materials in a neutral studio, one per colourway, on transparent background
+    # beauty: the real materials in a studio, one per colourway, with a contact shadow on a transparent background
+    use_engine('CYCLES')
     lights(True)
-    bg.inputs['Color'].default_value = (0.8, 0.8, 0.82, 1)
-    bg.inputs['Strength'].default_value = 0.35
+    world.node_tree.links.new(hdri.outputs['Color'], bg.inputs['Color'])
+    bg.inputs['Strength'].default_value = RENDER.get('hdri_strength', 0.45)
+    floor.hide_render = False
     for cw in colorways:
         apply_colorway(cw)
         render(os.path.join(d, f'beauty_{cw}.png'), transparent=True, view='AgX')
+    floor.hide_render = True
+    for l in list(bg.inputs['Color'].links):
+        world.node_tree.links.remove(l)
+    use_engine(EEVEE)
     manifest['views'][view] = {'azimuth': az, 'elevation': el, 'camera': list(cam.location), 'distance': used}
     print('view done', view)
 
