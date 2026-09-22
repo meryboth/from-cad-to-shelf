@@ -167,12 +167,14 @@ def restore():
 
 
 protected = set(spec.get('protected_materials', []))
+exact = set(spec.get('exact_materials', []))  # a subset of protected: copied as they are, not just in colour
+MASKS_ONLY = '--masks-only' in args
 white, _, _ = emission('pass_white')
 black, _, _ = emission('pass_black', (0, 0, 0))
 
 
-def is_protected(o):
-    return any(m and m.name in protected for m in original[o.name])
+def is_protected(o, names=None):
+    return any(m and m.name in (names or protected) for m in original[o.name])
 
 
 # ---------- scene ----------
@@ -298,10 +300,14 @@ for view, (az, el) in VIEWS.items():
     for name, fn in (('depth', lambda o: depth),
                      ('normal', lambda o: normal),
                      ('mask', lambda o: white),
-                     ('mask_protected', lambda o: white if is_protected(o) else black)):
+                     ('mask_protected', lambda o: white if is_protected(o) else black),
+                     ('mask_exact', lambda o: white if exact and is_protected(o, exact) else black)):
         paint(fn)
         render(os.path.join(d, f'{name}.png'), view='Raw')  # data, not a picture: no tone mapping
         restore()
+    if MASKS_ONLY:
+        manifest['views'][view] = {'azimuth': az, 'elevation': el, 'camera': list(cam.location), 'distance': used}
+        continue
     # beauty: the real materials in a studio, one per colourway, with a contact shadow on a transparent background
     use_engine('CYCLES')
     lights(True)

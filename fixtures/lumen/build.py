@@ -325,6 +325,7 @@ def export_product(folder):
                   'Cartridge slot on the back', 'Volume wheel on the right side', 'Built-in speaker',
                   'Two colorways: White and Signal Orange'],
         'protected_materials': ['bezel', 'screen', 'dpad', 'ab', 'pills'],
+        'exact_materials': ['screen', 'bezel'],  # the LCD and the wordmark: exact; the buttons: colour only
         'colorways': colorways,
     }
     json.dump(spec, open(os.path.join(folder, 'product.json'), 'w', encoding='utf-8'), indent=2)

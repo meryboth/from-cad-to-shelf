@@ -77,17 +77,25 @@ def describe(spec, colorway):
     return f"{spec.get('category', 'product')} called {spec['name']}, {colorway.replace('-', ' ')} colorway"
 
 
-def lock_protected(img, passes, view, colorway, feather=1.5):
-    """Put the protected parts (screen, buttons, logo...) back exactly as the reference has them.
-    Only for backends that keep the camera: the ControlNet graph does, pixel for pixel."""
+def lock_protected(img, passes, view, colorway, light=0.35, feather=1.5):
+    """Bring the protected parts back from the reference, after generation. Two kinds:
+    exact parts (mask_exact: a screen, a logo) are copied as they are; the other protected parts keep the reference's
+    colour but take `light` of their lightness from the photo, so they get its light and texture instead of looking
+    pasted on. Only for backends that keep the camera: the ControlNet graph does, pixel for pixel."""
+    import numpy as np
     from PIL import ImageFilter
     d = os.path.join(passes, view)
-    mask_path = os.path.join(d, 'mask_protected.png')
-    if not os.path.exists(mask_path):
+    load = lambda n: Image.open(os.path.join(d, n)).convert('L').resize(img.size, Image.LANCZOS).filter(ImageFilter.GaussianBlur(feather))
+    if not os.path.exists(os.path.join(d, 'mask_protected.png')):
         return img
     ref = on_grey(os.path.join(d, f'beauty_{colorway}.png')).resize(img.size, Image.LANCZOS)
-    mask = Image.open(mask_path).convert('L').resize(img.size, Image.LANCZOS).filter(ImageFilter.GaussianBlur(feather))
-    return Image.composite(ref, img, mask)
+    g, r = (np.asarray(im.convert('LAB')).astype(float) for im in (img, ref))
+    r[..., 0] = g[..., 0] * light + r[..., 0] * (1 - light)
+    tinted = Image.fromarray(r.clip(0, 255).astype('uint8'), 'LAB').convert('RGB')
+    out = Image.composite(tinted, img, load('mask_protected.png'))
+    if os.path.exists(os.path.join(d, 'mask_exact.png')):
+        out = Image.composite(ref, out, load('mask_exact.png'))
+    return out
 
 
 FAST = '--quality' not in sys.argv
