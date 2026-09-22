@@ -148,7 +148,64 @@ def centered(brand, name, tagline, product, W, H):
     return img
 
 
-TEMPLATES = {'split': split, 'centered': centered}
+def cover(img, W, H, focus=(0.5, 0.5)):
+    """Scale to fill W x H and crop around `focus` (fractions of the image)."""
+    k = max(W / img.width, H / img.height)
+    im = img.resize((math.ceil(img.width * k), math.ceil(img.height * k)), Image.LANCZOS)
+    x = min(max(int(im.width * focus[0] - W / 2), 0), im.width - W)
+    y = min(max(int(im.height * focus[1] - H / 2), 0), im.height - H)
+    return im.crop((x, y, x + W, y + H))
+
+
+def scrim(img, height, color, strength=0.55):
+    """A soft band of colour from the top edge down, so type reads on any photo."""
+    band = Image.new('L', (1, height))
+    for i in range(height):
+        band.putpixel((0, i), int(255 * strength * (1 - i / height) ** 1.6))
+    over = Image.new('RGB', img.size, color)
+    mask = Image.new('L', img.size, 0)
+    mask.paste(band.resize((img.width, height)), (0, 0))
+    return Image.composite(over, img, mask)
+
+
+def photo(brand, name, tagline, product, W, H):
+    """The generated scene full bleed, the type on a soft scrim at the top: logo, title, tagline."""
+    t = brand.spec['templates'].get('photo', {'scrim': 'ink', 'title': 'cream', 'tagline': 'cream', 'logo': 'cream'})
+    img = scrim(cover(product, W, H, (0.5, 0.6)), int(H * 0.42), brand.color(t['scrim']))
+    d = ImageDraw.Draw(img)
+    m = int(min(W, H) * 0.07)
+    draw_logo(img, brand, W / 2, H * 0.05, min(W, H) * 0.035, brand.color(t['logo']), 'center')
+    f = fit_font(d, brand, 'display', name, W - 2 * m, min(H * 0.13, W * 0.17))
+    w, h, l, top = text_size(d, name, f)
+    y = H * 0.05 + min(W, H) * 0.08
+    d.text(((W - w) / 2 - l, y - top), name, font=f, fill=brand.color(t['title']))
+    ft = brand.font('text', int(h * 0.34))
+    tw, th, tl, tt = text_size(d, tagline, ft)
+    d.text(((W - tw) / 2 - tl, y + h * 1.22 - tt), tagline, font=ft, fill=brand.color(t['tagline']))
+    return img
+
+
+def split_photo(brand, name, tagline, product, W, H):
+    """Type on the brand colour on the left, the generated scene on the right, like a print spread."""
+    t = brand.spec['templates']['split']
+    img = Image.new('RGB', (W, H), brand.color(t['background']))
+    pw = int(W * 0.5)
+    img.paste(cover(product, pw, H, (0.5, 0.55)), (W - pw, 0))
+    d = ImageDraw.Draw(img)
+    m = int(min(W, H) * 0.075)
+    f = fit_font(d, brand, 'display', name, W - pw - 2 * m, H * 0.3)
+    w, h, l, top = text_size(d, name, f)
+    d.text((m - l, m - top), name, font=f, fill=brand.color(t['title']))
+    ft = brand.font('text', int(H * 0.06))
+    for i, line in enumerate(wrap(d, tagline, ft, W - pw - 2 * m)):
+        lw, lh, ll, lt = text_size(d, line, ft)
+        d.text((m - ll, m + h * 1.25 - lt + i * H * 0.08), line, font=ft, fill=brand.color(t['tagline']))
+    draw_logo(img, brand, m, H - m - H * 0.06, H * 0.06, brand.color(t['logo']))
+    return img
+
+
+TEMPLATES = {'split': split, 'centered': centered, 'photo': photo, 'split-photo': split_photo}
+PHOTO_TEMPLATE = {'landscape': 'split-photo', 'square': 'photo', 'portrait': 'photo', 'story': 'photo'}
 
 if __name__ == '__main__':
     args = sys.argv[1:]
@@ -157,10 +214,12 @@ if __name__ == '__main__':
     brand = Brand(brand_dir)
     spec = json.load(open(os.path.join(product_dir, 'product.json'), encoding='utf-8'))
     fmt = opt('--format', 'landscape')
-    template = opt('--template', DEFAULT_TEMPLATE[fmt])
+    is_cutout = Image.open(image).mode == 'RGBA'  # a studio cut-out, or a generated scene
+    template = opt('--template', (DEFAULT_TEMPLATE if is_cutout else PHOTO_TEMPLATE)[fmt])
     tagline = opt('--tagline', brand.spec['taglines'][0])
     W, H = FORMATS[fmt]
-    piece = TEMPLATES[template](brand, spec['name'], tagline, cutout(image), W, H)
+    src = cutout(image) if is_cutout else Image.open(image).convert('RGB')
+    piece = TEMPLATES[template](brand, spec['name'], tagline, src, W, H)
     os.makedirs(out, exist_ok=True)
     name = opt('--name', f'{template}-{fmt}')
     piece.save(os.path.join(out, f'{name}.png'))

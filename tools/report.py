@@ -33,7 +33,7 @@ def generations(pid):
         return ''
     recs = [json.loads(l) for l in open(ledger, encoding='utf-8') if l.strip()]
     latest = {}
-    for r in recs:  # the newest image per backend and combination
+    for r in [r for r in recs if not r.get('format')]:  # the model comparison: the newest image per backend and combination
         latest[(r['view'], r['scene'], r['colorway'], r['backend'])] = r
     combos = sorted({k[:3] for k in latest})
     backends = [b for b in BACKENDS if any(k[3] == b for k in latest)]
@@ -54,10 +54,11 @@ def generations(pid):
 
 def layouts(pid):
     d = os.path.join(RUNS, pid, 'layout')
-    files = sorted(f for f in os.listdir(d) if f.endswith('.png')) if os.path.isdir(d) else []
+    files = sorted(os.path.relpath(os.path.join(r, f), d).replace(os.sep, '/') for r, _, fs in os.walk(d) for f in fs
+                   if f.endswith('.png')) if os.path.isdir(d) else []
     if not files:
         return ''
-    figs = ''.join(f'<figure><img class="piece" loading="lazy" src="{pid}/layout/{f}" alt="{e(f[:-4])}"><figcaption>{e(f[:-4])}</figcaption></figure>' for f in files)
+    figs = ''.join(f'<figure><img class="piece" loading="lazy" src="{pid}/layout/{f}" alt="{e(f[:-4])}"><figcaption>{e(f[:-4].replace('/', ' · '))}</figcaption></figure>' for f in files)
     return f'<h3>Stage 4 · Layout <small>prototype: the product image is still the studio reference, until ComfyUI renders it</small></h3><div class="pieces">{figs}</div>'
 
 

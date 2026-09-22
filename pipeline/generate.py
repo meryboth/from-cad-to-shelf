@@ -6,7 +6,8 @@
 #   nano-banana-pro  Gemini 3 Pro Image. Paid.
 # Paid backends only run with --spend and a COMFY_API_KEY, and every call is written to runs/<product>/generate/ledger.jsonl.
 #
-# Usage: py pipeline/generate.py <product dir> <brand dir> <passes dir> --backend B --view V --colorway C --scene S [--seed N] [--spend]
+# Usage: py pipeline/generate.py <product dir> <brand dir> <passes dir> --backend B --view V --colorway C --scene S
+#          [--format square|portrait|story|landscape] [--seed N] [--spend]
 import io
 import json
 import os
@@ -124,19 +125,28 @@ def local_sdxl(passes, view, colorway, scene, spec, seed):
     return run(g), pos
 
 
+# a piece is composed for its layout: the right aspect ratio, and calm space where the type goes
+FORMATS = {'square': ('1:1', 'top third'), 'portrait': ('4:5', 'top third'), 'story': ('9:16', 'top 30 percent'),
+           'landscape': ('1:1', None)}  # the landscape spread puts the photo on one half, a square crop
+
 GEMINI = {'nano-banana': ('GeminiImageNode', 'gemini-2.5-flash-image'),
           'nano-banana-2': ('GeminiImage2Node', 'Nano Banana 2 (Gemini 3.1 Flash Image)'),
           'nano-banana-pro': ('GeminiImage2Node', 'gemini-3-pro-image-preview')}
 
 
-def gemini(backend, passes, view, colorway, scene, spec, seed):
+def gemini(backend, passes, view, colorway, scene, spec, seed, fmt=None):
     node, model = GEMINI[backend]
     ref = upload(on_grey(os.path.join(passes, view, f'beauty_{colorway}.png')), f'{spec["name"]}_{view}_{colorway}.png')
     prompt = (f"This image shows a {describe(spec, colorway)}. Create a professional product photograph of this exact product: "
               f"keep its shape, proportions, colours, buttons, screen and printed text exactly as they are, and keep the camera angle. "
               f"Replace the grey background with this scene: {scene['prompt']}. Photorealistic, natural materials, real lighting "
               f"and reflections on the product that match the scene. No added text or logos.")
-    inputs = {'prompt': prompt, 'model': model, 'seed': seed, 'images': ['ref', 0], 'aspect_ratio': '1:1', 'response_modalities': 'IMAGE'}
+    aspect, headroom = FORMATS.get(fmt, ('1:1', None))
+    if headroom:
+        prompt += (f" Compose it as a campaign photo: the product sits in the lower part of the frame and fully visible, "
+                   f"and the {headroom} of the image is calm, empty background with nothing important in it, "
+                   f"because a headline will be set there.")
+    inputs = {'prompt': prompt, 'model': model, 'seed': seed, 'images': ['ref', 0], 'aspect_ratio': aspect, 'response_modalities': 'IMAGE'}
     if node == 'GeminiImage2Node':
         inputs['resolution'] = '1K'
     g = {'ref': {'class_type': 'LoadImage', 'inputs': {'image': ref}},
@@ -160,18 +170,18 @@ if __name__ == '__main__':
                          f'environment variable or in {KEY_FILE}. It is never stored in this repo.')
     t0 = time.time()
     img, prompt = local_sdxl(passes, view, colorway, scene, spec, seed) if backend == 'local-sdxl' else \
-        gemini(backend, passes, view, colorway, scene, spec, seed)
+        gemini(backend, passes, view, colorway, scene, spec, seed, opt('--format'))
     seconds = round(time.time() - t0, 1)
     raw = img
     if backend == 'local-sdxl' and '--no-lock' not in args:
         img = lock_protected(img, passes, view, colorway)
     out = os.path.join(os.path.dirname(os.path.abspath(passes)), 'generate', backend)
     os.makedirs(out, exist_ok=True)
-    name = f'{view}_{scene_id}_{colorway}_s{seed}'
+    name = f'{view}_{scene_id}_{colorway}_s{seed}' + (f"_{opt('--format')}" if opt('--format') else '')
     img.save(os.path.join(out, name + '.png'))
     if img is not raw:
         raw.save(os.path.join(out, name + '_raw.png'))  # before the lock, to compare
-    record = {'backend': backend, 'view': view, 'colorway': colorway, 'scene': scene_id, 'seed': seed, 'seconds': seconds,
+    record = {'backend': backend, 'view': view, 'colorway': colorway, 'scene': scene_id, 'seed': seed, 'format': opt('--format'), 'seconds': seconds,
               'usd': PRICES[backend], 'prompt': prompt, 'file': f'{backend}/{name}.png', 'at': time.strftime('%Y-%m-%d %H:%M:%S')}
     with open(os.path.join(os.path.dirname(out), 'ledger.jsonl'), 'a', encoding='utf-8') as f:
         f.write(json.dumps(record) + '\n')
