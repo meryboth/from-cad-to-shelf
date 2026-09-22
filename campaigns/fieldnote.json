@@ -1,0 +1,39 @@
+{
+  "name": "fieldnote campaign",
+  "product": "products/lumen",
+  "brand": "brands/fieldnote",
+  "backend": "local-sdxl",
+  "scene": "studio-ref",
+  "seed": 11,
+  "pieces": [
+    {
+      "template": "poster",
+      "format": "portrait",
+      "view": "front",
+      "colorway": "white",
+      "tagline": "Play it slow."
+    },
+    {
+      "template": "poster",
+      "format": "story",
+      "view": "front",
+      "colorway": "signal-orange",
+      "tagline": "Made to be played."
+    },
+    {
+      "template": "spread",
+      "format": "landscape",
+      "view": "left",
+      "colorway": "white",
+      "tagline": "One screen. Two buttons."
+    },
+    {
+      "template": "specsheet",
+      "format": "sheet",
+      "view": "front",
+      "colorway": "white",
+      "tagline": "Play it slow.",
+      "view2": "right"
+    }
+  ]
+}

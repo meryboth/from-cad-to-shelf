@@ -8,6 +8,7 @@ import os
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RUNS = os.path.join(ROOT, 'runs')
 STAGES = [
+    ('0', 'Style', 'A moodboard in: palette, light, composition and type are measured, and a brand and a campaign come out.'),
     ('1', 'Passes', 'Depth, normals, masks and a studio reference per view and colorway, from any product.'),
     ('2', 'Plan', 'A campaign file lists the pieces: template, format, view, colorway, scene. Jev will propose it later.'),
     ('3', 'Generate', 'A ComfyUI graph turns the passes and the plan into photoreal images.'),
@@ -86,6 +87,32 @@ def consistency(pid):
             f'<div class="scroll"><table class="grid qa"><tbody>{rows}</tbody></table></div>')
 
 
+def styles():
+    """Brands that were read from a moodboard: the references, the palette taken from them, and what was measured."""
+    out = ''
+    for name in sorted(os.listdir(os.path.join(ROOT, 'brands'))):
+        path = os.path.join(ROOT, 'brands', name, 'brand.json')
+        if not os.path.exists(path):
+            continue
+        b = json.load(open(path, encoding='utf-8'))
+        if not b.get('from_references'):
+            continue
+        refs = os.path.join(ROOT, b['from_references'])
+        thumbs = ''.join(
+            f'<img class="ref" loading="lazy" src="{os.path.relpath(os.path.join(refs, f), RUNS).replace(os.sep, "/")}" alt="reference">'
+            for f in sorted(os.listdir(refs))[:6] if f.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')))
+        sw = ''.join(f'<span class="cw"><span class="sw"><i style="background:{v}"></i></span>{e(k)} {e(v)}</span>'
+                     for k, v in b['colors'].items() if k in ('paper', 'ink', 'signal', 'stone'))
+        m = b.get('measured', {})
+        facts = (f"light: {e(m.get('light', {}).get('words', ''))} · contrast {m.get('light', {}).get('contrast')} · "
+                 f"air {m.get('composition', {}).get('air')} · templates {', '.join(m.get('composition', {}).get('templates', []))} · "
+                 f"headline {m.get('type', {}).get('weight')} {m.get('type', {}).get('case')}")
+        out += (f'<section class="product"><header><h2>{e(b["name"])}</h2><span class="tag">read from references</span></header>'
+                f'<div class="refs">{thumbs}</div><h3>Palette taken from them</h3><div class="cws">{sw}</div>'
+                f'<h3>Measured</h3><p class="sub">{facts}</p></section>')
+    return out
+
+
 def shots(pid):
     path = os.path.join(RUNS, pid, 'shots.json')
     if not os.path.exists(path):
@@ -159,7 +186,10 @@ products = [p for p in os.listdir(os.path.join(ROOT, 'products')) if os.path.exi
 # our own products first, then third-party ones
 products.sort(key=lambda p: ('source' in json.load(open(os.path.join(ROOT, 'products', p, 'product.json'), encoding='utf-8')), p))
 has = lambda *parts: any(os.path.exists(os.path.join(RUNS, p, *parts)) for p in products)
-done = {'1': has('passes', 'manifest.json'), '2': os.path.isdir(os.path.join(ROOT, 'campaigns')), '3': has('generate'),
+done = {'0': any(json.load(open(os.path.join(ROOT, 'brands', n, 'brand.json'), encoding='utf-8')).get('from_references')
+                 for n in os.listdir(os.path.join(ROOT, 'brands'))
+                 if os.path.exists(os.path.join(ROOT, 'brands', n, 'brand.json'))),
+        '1': has('passes', 'manifest.json'), '2': os.path.isdir(os.path.join(ROOT, 'campaigns')), '3': has('generate'),
         '3b': has('consistency.json'), '4': has('layout'), '5': has('qa.json'), '6': has('layout'), '7': True}
 # layout counts as started, not done, until it runs on generated images
 stages = ''.join(f'<li class="{"done" if done.get(n) else ""}"><b>{n}</b><span><strong>{e(t)}</strong>{e(d)}</span></li>' for n, t, d in STAGES)
@@ -198,6 +228,8 @@ page = f'''<!doctype html>
   .grid img {{ width: 150px; height: 150px; object-fit: contain; border-radius: 8px; cursor: zoom-in; display: block; }}
   .grid td.beauty img {{ background: #e6e3dd; }} .grid td.pass img {{ background: #000; }}
   .empty {{ color: var(--soft); }}
+  .refs {{ display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }}
+  .refs img {{ height: 150px; border-radius: 8px; border: 1px solid var(--line); }}
   .grid.qa img {{ width: 110px; height: 110px; object-fit: cover; }} .grid.qa td {{ text-align: center; font-size: 13px; }} .grid.qa td small {{ display: block; color: var(--soft); }}
   .verdict {{ padding: 3px 10px; border-radius: 99px; font-weight: 600; font-size: 12px; }}
   .verdict.publish {{ background: #dff0e2; color: #2d6a3b; }} .verdict.review {{ background: #fdf0d5; color: #8a5a00; }}
@@ -216,6 +248,7 @@ page = f'''<!doctype html>
   <p class="sub">Run report · generated {datetime.datetime.now().strftime('%d/%m/%Y %H:%M')} · {len(products)} products</p>
   <nav>{nav}</nav>
   <ol class="stages">{stages}</ol>
+  {styles()}
   {''.join(product_section(p) for p in products)}
 </main>
 <div id="box"><img alt=""><p></p></div>

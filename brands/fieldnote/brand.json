@@ -1,0 +1,101 @@
+{
+  "name": "fieldnote",
+  "fictional": true,
+  "from_references": "references/pixel-refs",
+  "tone": "Read from the references: neutral, soft even light, gentle shadows, balanced exposure.",
+  "colors": {
+    "paper": "#A19F94",
+    "stone": "#E6E6E6",
+    "ink": "#20211E",
+    "black": "#20211E",
+    "signal": "#68A0F2",
+    "white": "#FAFAF8"
+  },
+  "fonts": {
+    "display": [
+      "fonts/InterTight.ttf#Medium"
+    ],
+    "medium": [
+      "fonts/InterTight.ttf#Medium"
+    ],
+    "text": [
+      "fonts/InterTight.ttf#Regular"
+    ],
+    "mono": [
+      "fonts/SpaceMono-Regular.ttf"
+    ],
+    "mono_bold": [
+      "fonts/SpaceMono-Bold.ttf"
+    ]
+  },
+  "logo": {
+    "text": "fieldnote\ninstruments",
+    "mark": "meridian"
+  },
+  "copy": {
+    "taglines": [
+      "Play it slow.",
+      "Made to be played.",
+      "One screen. Two buttons."
+    ],
+    "intro": "A handheld with a backlit screen, a D-pad and a cartridge slot on the back. Made for the games you remember, and the ones you have not played yet.",
+    "place": "Buenos Aires",
+    "coords": [
+      "34\u00b036\u2032S",
+      "58\u00b022\u2032W"
+    ],
+    "series": "Field Series",
+    "nav": [
+      "handheld",
+      "colorways",
+      "specs"
+    ]
+  },
+  "templates": {
+    "poster": {
+      "background": "paper",
+      "ink": "black",
+      "accent": "signal",
+      "title": "signal"
+    },
+    "spread": {
+      "background": "paper",
+      "ink": "black",
+      "accent": "signal"
+    },
+    "specsheet": {
+      "background": "paper",
+      "ink": "black",
+      "accent": "signal",
+      "card": "white"
+    }
+  },
+  "measured": {
+    "light": {
+      "warmth": 5.0,
+      "contrast": 21.0,
+      "brightness": 65.2,
+      "words": "neutral, soft even light, gentle shadows, balanced exposure"
+    },
+    "composition": {
+      "content_y": 0.469,
+      "content_x": 0.495,
+      "air": 0.94,
+      "rules": 0.014,
+      "templates": [
+        "poster",
+        "spread",
+        "specsheet"
+      ],
+      "scores": {
+        "poster": 2.028,
+        "spread": 0.852,
+        "specsheet": 0.059
+      }
+    },
+    "type": {
+      "weight": "Medium",
+      "case": "sentence"
+    }
+  }
+}

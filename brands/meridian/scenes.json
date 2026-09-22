@@ -17,11 +17,11 @@
   },
   "held": {
     "label": "Held in two hands",
-    "prompt_template": "photograph of a person's two hands holding a {product}, the hands are the subject and fill much of the frame, fingers wrap around the left and right edges, thumbs resting below the buttons, nothing covers the screen, soft window daylight, a softly blurred light grey room behind, realistic skin, natural anatomy, five fingers on each hand, photorealistic lifestyle photo",
+    "prompt_template": "close-up lifestyle photograph of two hands holding a {product}, hands large in the frame, fingers wrapped around the left and right edges with visible knuckles and nails, skin with natural texture and soft shadows, shot on a 50mm lens at f2, shallow depth of field, the background a blurred warm grey room, soft window light from the left, photojournalistic, unretouched",
     "prompt": "held in two hands, lifestyle photo",
-    "negative": "no hands, missing hands, floating object, extra fingers, six fingers, fused fingers, deformed hands, mannequin, doll hands, cartoon, illustration, 3d render, cgi, text, watermark, blurry, lowres",
-    "depth": 0.5,
-    "depth_end": 0.55,
+    "negative": "no hands, missing hands, floating object, extra fingers, six fingers, fused fingers, deformed hands, plastic skin, doll hands, mannequin, smooth airbrushed skin, cartoon, illustration, 3d render, cgi, text, watermark, blurry product, lowres",
+    "depth": 0.55,
+    "depth_end": 0.6,
     "normal": 0.25,
     "denoise": 0.97
   }

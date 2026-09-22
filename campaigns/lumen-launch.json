@@ -80,13 +80,13 @@
   ],
   "framings": {
     "held": {
-      "views": "held=0,24",
-      "fill": 0.5,
+      "views": "held=0,18",
+      "fill": 0.62,
       "format": "portrait"
     },
     "held-close": {
-      "views": "held=-22,16",
-      "fill": 0.62,
+      "views": "held=-20,10",
+      "fill": 0.74,
       "format": "square"
     }
   }

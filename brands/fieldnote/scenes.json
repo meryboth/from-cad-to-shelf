@@ -1,0 +1,10 @@
+{
+  "studio-ref": {
+    "label": "From the references",
+    "prompt": "on a seamless neutral studio backdrop, neutral, soft even light, gentle shadows, balanced exposure, a gentle contact shadow, campaign product photo",
+    "depth": 0.95,
+    "depth_end": 0.95,
+    "normal": 0.6,
+    "denoise": 0.62
+  }
+}
