@@ -10,7 +10,7 @@ A probabilistic decision layer (Jev) plans the creative and routes every asset: 
 - [x] The product, built in Blender from code: exact geometry, four colorways
 - [x] Control passes from any product: depth, normals, product mask, protected-parts mask, beauty per colorway
 - [ ] Creative planning with probabilities (Jev)
-- [ ] Photoreal generation in ComfyUI with ControlNet
+- [x] Photoreal generation in ComfyUI: local SDXL + ControlNet, and Gemini image models compared
 - [ ] Quality routing by confidence (Jev), compared with a VLM judge and a human
 - [ ] Copy from a fixed spec sheet
 - [ ] Report: cost per approved asset, calibration, latency
@@ -65,13 +65,35 @@ the product, and a faint micro-surface bump on every material. `product.json` ca
 `fixtures/lumen/build.py` builds LUMEN at real size (90 x 148 x 30 mm) and renders a studio shot.
 
 ```bash
-blender -b -P fixtures/lumen/build.py -- arcade-grey        # one colorway, also saves out/lumen.blend and out/lumen.glb
+blender -b -P fixtures/lumen/build.py -- white              # one colorway, also saves out/lumen.blend and out/lumen.glb
 blender -b -P fixtures/lumen/build.py -- all                # every colorway
-blender -b -P fixtures/lumen/build.py -- arcade-grey --front #
+blender -b -P fixtures/lumen/build.py -- white --front      #
 blender -b -P fixtures/lumen/build.py -- --export products/lumen  # as a pipeline product orthographic front view
 ```
 
-Colorways: `arcade-grey`, `clear-smoke`, `sunset-coral`, `mint`. Every part has an object index
+Colorways, in the meridian palette: `white`, and `signal-orange` in the brand's own orange (#FF5E2C). Every part has an object index
 (1 body, 2 screen, 3 controls, 4 cartridge, 5 internals) for the product masks later on.
 
-![The four colorways](docs/img/colorways.jpg)
+
+## Brand: meridian
+
+`brands/meridian/` holds the brand as data: palette, fonts (Inter Tight and Space Mono, OFL), logo, copy, scenes
+and templates. `pipeline/layout.py` sets real type on the product images in three templates: `poster` (portrait,
+story, square), `spread` (landscape) and `specsheet`. Another brand is another folder.
+
+## Model comparison
+
+The same view, scene and colorway through four image backends, with time and cost per image
+(`runs/<product>/generate/ledger.jsonl`):
+
+![Model comparison](docs/img/model-comparison.jpg)
+
+| Backend | Cost / image | Time | Notes |
+|---|---|---|---|
+| local-sdxl (RealVisXL + ControlNet) | free | ~10 min on a 6 GB laptop GPU | the camera is exact, so the protected parts can be locked back; invents detail elsewhere |
+| nano-banana | US$ 0.039 | ~17 s | faithful to the product, looks rendered |
+| nano-banana-2 | US$ 0.084 | ~19 s | faithful and photographic: the best value |
+| nano-banana-pro | US$ 0.161 | ~30 s | the most photographic, marginally |
+
+All three Gemini models warm a grey product towards beige under sunset light: a colour check belongs in the routing stage.
+The project continues on local SDXL, free, with the layout as the goal.

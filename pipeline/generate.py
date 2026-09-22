@@ -90,6 +90,11 @@ def lock_protected(img, passes, view, colorway, feather=1.5):
     return Image.composite(ref, img, mask)
 
 
+FAST = '--quality' not in sys.argv
+SAMPLING = {True: {'steps': 8, 'cfg': 1.5, 'sampler_name': 'euler', 'scheduler': 'sgm_uniform'},
+            False: {'steps': 30, 'cfg': 5.0, 'sampler_name': 'dpmpp_2m_sde', 'scheduler': 'karras'}}
+
+
 # ---------- backends ----------
 def local_sdxl(passes, view, colorway, scene, spec, seed):
     d = os.path.join(passes, view)
@@ -117,11 +122,15 @@ def local_sdxl(passes, view, colorway, scene, spec, seed):
         # start from the studio reference, so the colourway survives; the ControlNets hold the shape
         'latent': {'class_type': 'VAEEncode', 'inputs': {'pixels': ['img_start', 0], 'vae': ['ckpt', 2]}},
         'sample': {'class_type': 'KSampler', 'inputs': {
-            'model': ['ckpt', 0], 'seed': seed, 'steps': 30, 'cfg': 5.0, 'sampler_name': 'dpmpp_2m_sde', 'scheduler': 'karras',
+            'model': ['model', 0], 'seed': seed, **SAMPLING[FAST],
             'positive': ['apply_normal', 0], 'negative': ['apply_normal', 1], 'latent_image': ['latent', 0], 'denoise': 0.82}},
         'decode': {'class_type': 'VAEDecode', 'inputs': {'samples': ['sample', 0], 'vae': ['ckpt', 2]}},
         'save': {'class_type': 'SaveImage', 'inputs': {'images': ['decode', 0], 'filename_prefix': 'cad-to-shelf/local'}},
     }
+    # SDXL Lightning: the same graph in 8 steps instead of 30 (--quality for the slow, full sampler)
+    g['model'] = ({'class_type': 'LoraLoaderModelOnly', 'inputs': {
+        'model': ['ckpt', 0], 'lora_name': 'sdxl_lightning_8step_lora.safetensors', 'strength_model': 1.0}} if FAST else
+        {'class_type': 'ModelSamplingDiscrete', 'inputs': {'model': ['ckpt', 0], 'sampling': 'eps', 'zsnr': False}})
     return run(g), pos
 
 

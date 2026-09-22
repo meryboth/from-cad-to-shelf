@@ -1,5 +1,7 @@
 {
   "name": "LUMEN",
+  "code": "L-01",
+  "year": "2026",
   "category": "retro handheld game console",
   "fictional": true,
   "size_mm": [
@@ -14,7 +16,7 @@
     "Cartridge slot on the back",
     "Volume wheel on the right side",
     "Built-in speaker",
-    "Four colorways: Arcade Grey, Clear Smoke, Sunset Coral and Mint"
+    "Two colorways: White and Signal Orange"
   ],
   "protected_materials": [
     "bezel",
@@ -24,156 +26,93 @@
     "pills"
   ],
   "colorways": {
-    "arcade-grey": {
+    "white": {
       "body": {
         "color": [
-          0.55,
-          0.54,
-          0.51
+          0.8469,
+          0.8308,
+          0.807
+        ],
+        "roughness": 0.42,
+        "transmission": 0.0
+      },
+      "well": {
+        "color": [
+          0.719865,
+          0.7061799999999999,
+          0.6859500000000001
+        ],
+        "roughness": 0.6
+      },
+      "bezel": {
+        "color": [
+          0.0545,
+          0.0545,
+          0.0666
+        ],
+        "coat": 0.6
+      },
+      "screen": {
+        "color": [
+          1,
+          1,
+          1
+        ],
+        "roughness": 0.2,
+        "coat": 1.0
+      },
+      "dpad": {
+        "color": [
+          0.0545,
+          0.0545,
+          0.0666
+        ]
+      },
+      "ab": {
+        "color": [
+          1.0,
+          0.1119,
+          0.0252
+        ]
+      },
+      "pills": {
+        "color": [
+          0.7454,
+          0.7011,
+          0.6654
+        ]
+      },
+      "cart": {
+        "color": [
+          0.7454,
+          0.7011,
+          0.6654
+        ]
+      }
+    },
+    "signal-orange": {
+      "body": {
+        "color": [
+          1.0,
+          0.1119,
+          0.0252
         ],
         "roughness": 0.45,
         "transmission": 0.0
       },
       "well": {
         "color": [
-          0.4675,
-          0.459,
-          0.4335
-        ],
-        "roughness": 0.6
-      },
-      "bezel": {
-        "color": [
-          0.1,
-          0.1,
-          0.12
-        ],
-        "coat": 0.6
-      },
-      "screen": {
-        "color": [
-          1,
-          1,
-          1
-        ],
-        "roughness": 0.2,
-        "coat": 1.0
-      },
-      "dpad": {
-        "color": [
-          0.04,
-          0.04,
-          0.045
-        ]
-      },
-      "ab": {
-        "color": [
-          0.62,
-          0.06,
-          0.24
-        ]
-      },
-      "pills": {
-        "color": [
-          0.3,
-          0.3,
-          0.33
-        ]
-      },
-      "cart": {
-        "color": [
-          0.45,
-          0.45,
-          0.47
-        ]
-      }
-    },
-    "clear-smoke": {
-      "body": {
-        "color": [
-          0.28,
-          0.3,
-          0.34
-        ],
-        "roughness": 0.08,
-        "transmission": 0.92
-      },
-      "well": {
-        "color": [
-          0.28,
-          0.3,
-          0.34
-        ]
-      },
-      "bezel": {
-        "color": [
-          0.05,
-          0.05,
-          0.06
-        ],
-        "coat": 0.6
-      },
-      "screen": {
-        "color": [
-          1,
-          1,
-          1
-        ],
-        "roughness": 0.2,
-        "coat": 1.0
-      },
-      "dpad": {
-        "color": [
-          0.08,
-          0.08,
-          0.09
-        ]
-      },
-      "ab": {
-        "color": [
-          0.08,
-          0.08,
-          0.09
-        ]
-      },
-      "pills": {
-        "color": [
-          0.2,
-          0.2,
-          0.22
-        ]
-      },
-      "cart": {
-        "color": [
-          0.2,
-          0.21,
-          0.24
-        ]
-      }
-    },
-    "sunset-coral": {
-      "body": {
-        "color": [
           0.85,
-          0.22,
-          0.14
-        ],
-        "roughness": 0.5,
-        "transmission": 0.0
-      },
-      "well": {
-        "color": [
-          0.7224999999999999,
-          0.187,
-          0.11900000000000001
+          0.09511499999999999,
+          0.021419999999999998
         ],
         "roughness": 0.6
       },
       "bezel": {
         "color": [
-          0.16,
-          0.1,
-          0.1
+          0.0103,
+          0.0103,
+          0.0116
         ],
         "coat": 0.6
       },
@@ -188,98 +127,32 @@
       },
       "dpad": {
         "color": [
-          0.96,
-          0.9,
-          0.78
+          0.956,
+          0.956,
+          0.9387
         ]
       },
       "ab": {
         "color": [
-          0.96,
-          0.9,
-          0.78
+          0.956,
+          0.956,
+          0.9387
         ]
       },
       "pills": {
         "color": [
-          0.55,
-          0.22,
-          0.18
+          0.0545,
+          0.0545,
+          0.0666
         ]
       },
       "cart": {
         "color": [
-          0.96,
-          0.9,
-          0.78
-        ]
-      }
-    },
-    "mint": {
-      "body": {
-        "color": [
-          0.25,
-          0.62,
-          0.48
-        ],
-        "roughness": 0.5,
-        "transmission": 0.0
-      },
-      "well": {
-        "color": [
-          0.2125,
-          0.527,
-          0.408
-        ],
-        "roughness": 0.6
-      },
-      "bezel": {
-        "color": [
-          0.08,
-          0.12,
-          0.11
-        ],
-        "coat": 0.6
-      },
-      "screen": {
-        "color": [
-          1,
-          1,
-          1
-        ],
-        "roughness": 0.2,
-        "coat": 1.0
-      },
-      "dpad": {
-        "color": [
-          0.12,
-          0.2,
-          0.18
-        ]
-      },
-      "ab": {
-        "color": [
-          0.98,
-          0.98,
-          0.96
-        ]
-      },
-      "pills": {
-        "color": [
-          0.3,
-          0.5,
-          0.44
-        ]
-      },
-      "cart": {
-        "color": [
-          0.98,
-          0.98,
-          0.96
+          0.8469,
+          0.8308,
+          0.807
         ]
       }
     }
-  },
-  "code": "L-01",
-  "year": "2026"
+  }
 }

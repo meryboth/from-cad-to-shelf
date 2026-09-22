@@ -20,15 +20,12 @@ W, H, D = 0.090, 0.148, 0.030          # body
 R_TOP, R_BOTTOM = 0.008, 0.020         # corner radii: soft top, generous bottom
 SEAM = 0.0005                          # gap between front and back shells
 
+# two editions, in the meridian palette: a white one, and one in the brand's signal orange (#FF5E2C)
 COLORWAYS = {
-    'arcade-grey': dict(body=(0.55, 0.54, 0.51), rough=0.45, clear=False, ab=(0.62, 0.06, 0.24), dpad=(0.04, 0.04, 0.045),
-                        pills=(0.30, 0.30, 0.33), bezel=(0.10, 0.10, 0.12), screen=(0.55, 0.62, 0.30), cart=(0.45, 0.45, 0.47)),
-    'clear-smoke': dict(body=(0.28, 0.30, 0.34), rough=0.08, clear=True, ab=(0.08, 0.08, 0.09), dpad=(0.08, 0.08, 0.09),
-                        pills=(0.20, 0.20, 0.22), bezel=(0.05, 0.05, 0.06), screen=(0.45, 0.70, 0.75), cart=(0.20, 0.21, 0.24)),
-    'sunset-coral': dict(body=(0.85, 0.22, 0.14), rough=0.5, clear=False, ab=(0.96, 0.90, 0.78), dpad=(0.96, 0.90, 0.78),
-                         pills=(0.55, 0.22, 0.18), bezel=(0.16, 0.10, 0.10), screen=(0.95, 0.70, 0.40), cart=(0.96, 0.90, 0.78)),
-    'mint': dict(body=(0.25, 0.62, 0.48), rough=0.5, clear=False, ab=(0.98, 0.98, 0.96), dpad=(0.12, 0.20, 0.18),
-                 pills=(0.30, 0.50, 0.44), bezel=(0.08, 0.12, 0.11), screen=(0.70, 0.85, 0.55), cart=(0.98, 0.98, 0.96)),
+    'white': dict(body=(0.8469, 0.8308, 0.807), rough=0.42, clear=False, ab=(1.0, 0.1119, 0.0252), dpad=(0.0545, 0.0545, 0.0666),
+                  pills=(0.7454, 0.7011, 0.6654), bezel=(0.0545, 0.0545, 0.0666), screen=(0.55, 0.62, 0.30), cart=(0.7454, 0.7011, 0.6654)),
+    'signal-orange': dict(body=(1.0, 0.1119, 0.0252), rough=0.45, clear=False, ab=(0.956, 0.956, 0.9387), dpad=(0.956, 0.956, 0.9387),
+                          pills=(0.0545, 0.0545, 0.0666), bezel=(0.0103, 0.0103, 0.0116), screen=(0.55, 0.62, 0.30), cart=(0.8469, 0.8308, 0.807)),
 }
 
 
@@ -301,7 +298,7 @@ def export_product(folder):
     """Write LUMEN the way the pipeline takes any product: product.glb plus product.json."""
     os.makedirs(folder, exist_ok=True)
     reset()
-    build('arcade-grey')
+    build('white')
     bpy.ops.export_scene.gltf(filepath=os.path.join(folder, 'product.glb'), export_apply=True)
     part = {'body': 'body', 'well': None, 'bezel': 'bezel', 'screen': 'screen', 'dpad': 'dpad', 'ab': 'ab',
             'pills': 'pills', 'cart': 'cart'}
@@ -326,7 +323,7 @@ def export_product(folder):
         'size_mm': [90, 148, 30],
         'facts': ['A handheld game console with a retro design', 'Backlit square screen', 'D-pad, A and B buttons, Start and Select',
                   'Cartridge slot on the back', 'Volume wheel on the right side', 'Built-in speaker',
-                  'Four colorways: Arcade Grey, Clear Smoke, Sunset Coral and Mint'],
+                  'Two colorways: White and Signal Orange'],
         'protected_materials': ['bezel', 'screen', 'dpad', 'ab', 'pills'],
         'colorways': colorways,
     }
@@ -339,13 +336,13 @@ if '--export' in args:
     export_product(os.path.abspath(args[args.index('--export') + 1]))
     sys.exit(0)
 front = '--front' in args
-names = [a for a in args if not a.startswith('--')] or ['arcade-grey']
+names = [a for a in args if not a.startswith('--')] or ['white']
 if names == ['all']:
     names = list(COLORWAYS)
 for cw in names:
     reset()
     build(cw)
-    if cw == 'arcade-grey' and not front:
+    if cw == 'white' and not front:
         bpy.ops.wm.save_as_mainfile(filepath=os.path.join(OUT, 'lumen.blend'))
         bpy.ops.export_scene.gltf(filepath=os.path.join(OUT, 'lumen.glb'), export_apply=True)
     studio(front)
