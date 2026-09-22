@@ -18,8 +18,27 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from layout import (FORMATS, Brand, fit, fit_font, load_product, logo, multiply_block, paragraph, place,  # noqa: E402
                     text, text_box, wrap)
 
-ARCHETYPES = ('editorial', 'stack', 'corner', 'field', 'index')
+ARCHETYPES = ('editorial', 'stack', 'corner', 'field', 'index', 'bleed', 'split', 'oversize', 'tiles', 'whisper')
 MEASURE = ImageDraw.Draw(Image.new('RGB', (8, 8)))
+
+
+def luminance(c):
+    v = [x / 255 for x in c]
+    v = [x / 12.92 if x <= 0.04045 else ((x + 0.055) / 1.055) ** 2.4 for x in v]
+    return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]
+
+
+def contrast(a, b):
+    la, lb = luminance(a), luminance(b)
+    return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
+
+
+def readable(on, options, minimum=4.5):
+    """The first colour that reads on this background, else the one that reads best: type is never a guess."""
+    for c in options:
+        if contrast(on, c) >= minimum:
+            return c
+    return max(options, key=lambda c: contrast(on, c))
 
 
 def sample(rng, style, W, H, archetype):
@@ -141,6 +160,41 @@ def plan(p, brand, spec, ctx, W, H):
         foot, _ = band_stack(['headline'], brand, spec, ctx, p, W, H, m, inner, H - m - H * p['headline'] * 1.25, p['align'])
         calls += top + foot
         product = (m, tb + p['gap'] * 2, W - m, H - m - H * (p['headline'] * 1.5))
+    elif p['archetype'] == 'bleed':
+        # the product cropped by the edge of the canvas, the headline over it
+        head, _ = band_stack(['headline'] + (['tagline'] if p['tagline'] else []), brand, spec, ctx, p, W, H, m,
+                             inner * 0.85, H - m - H * (p['headline'] * 1.9), p['align'])
+        top, _ = band_stack(['logo'], brand, spec, ctx, p, W, H, m, inner * 0.3, m)
+        calls += head + top
+        right = p['align'] == 'right'
+        product = (W * (-0.1 if right else 0.18), -H * 0.06, W * (0.86 if right else 1.12), H * 0.86)
+    elif p['archetype'] == 'split':
+        # two colour fields with a seam; the product sits across it
+        top, tb = band_stack(['logo'] + (['tagline'] if p['tagline'] else []), brand, spec, ctx, p, W, H, m, inner * 0.5, m)
+        foot, _ = band_stack(['headline'], brand, spec, ctx, p, W, H, m, inner, H - m - H * p['headline'] * 1.3, p['align'])
+        calls += top + foot
+        product = (m, H * 0.2, W - m, H * 0.84)
+    elif p['archetype'] == 'oversize':
+        # the name set so large it runs off the canvas, the product small and low
+        head, hb = band_stack(['headline'], brand, spec, ctx, p, W, H, -W * 0.05, inner * 1.45, H * 0.1)
+        foot, _ = band_stack(['meta', 'logo'], brand, spec, ctx, p, W, H, m, inner * 0.45, H - m - H * 0.15)
+        calls += head + foot
+        product = (W * 0.4, hb + p['gap'] * 2, W - m * 0.3, H - m - H * 0.17)
+    elif p['archetype'] == 'tiles':
+        # the same product repeated on a grid, like a contact sheet
+        top, tb = band_stack(['index'] if p['index'] else ['logo'], brand, spec, ctx, p, W, H, m, inner, m)
+        foot, _ = band_stack(['headline'] + (['tagline'] if p['tagline'] else []), brand, spec, ctx, p, W, H, m,
+                             inner * 0.7, H - m - H * (p['headline'] * 1.6))
+        calls += top + foot
+        product = (m, tb + p['gap'] * 2, W - m, H - m - H * (p['headline'] * 1.9))
+    elif p['archetype'] == 'whisper':
+        # almost nothing: a small product, one corner of type, a lot of paper
+        x = W - m - inner * 0.34 if p['align'] == 'right' else m
+        head, _ = band_stack(['headline'] + (['tagline'] if p['tagline'] else []), brand, spec, ctx, p, W, H, x,
+                             inner * 0.34, H - m - H * 0.17)
+        top, _ = band_stack(['logo'], brand, spec, ctx, p, W, H, m, inner * 0.3, m)
+        calls += head + top
+        product = (W * 0.3, H * 0.22, W * 0.7, H * 0.68)
     else:  # index
         top, tb = band_stack((['index'] if p['index'] else []) or ['logo'], brand, spec, ctx, p, W, H, m, inner, m)
         foot_kinds = ['headline'] + (['intro'] if p['intro'] else [])
@@ -169,12 +223,24 @@ def score(calls, product, p, W, H):
 
 def draw(p, calls, product_rect, brand, spec, product, W, H, ctx):
     t = brand.spec['templates'].get('poster', {'background': 'paper', 'ink': 'black', 'accent': 'signal'})
-    ink, accent = brand.color(t['ink']), brand.color(t['accent'])
-    img = Image.new('RGB', (W, H), brand.color(t['background']))
+    paper, ink, accent = brand.color(t['background']), brand.color(t['ink']), brand.color(t['accent'])
+    arch = p['archetype']
+    img = Image.new('RGB', (W, H), accent if arch == 'bleed' and p['field'] else paper)
+    if arch == 'split':  # two fields, one seam
+        ImageDraw.Draw(img).rectangle([0, 0, W, H * p['field_y']], fill=accent if p['field'] else ink)
     x0, y0, x1, y1 = product_rect
-    pr = fit(product, (x1 - x0) * p['product_scale'] * 1.7, (y1 - y0) * 0.96)
-    place(img, pr, x0 + (x1 - x0) * p['product_x'], (y0 + y1) / 2)
-    if p['field']:
+    if arch == 'tiles':  # the same product, repeated
+        cols, rows = (3, 2) if W < H * 1.2 else (4, 2)
+        cw, ch = (x1 - x0) / cols, (y1 - y0) / rows
+        cell = fit(product, cw * 0.82, ch * 0.86)
+        for r in range(rows):
+            for c in range(cols):
+                place(img, cell, x0 + cw * (c + 0.5), y0 + ch * (r + 0.5))
+    else:
+        scale = p['product_scale'] * (2.2 if arch == 'bleed' else 1.7)
+        pr = fit(product, (x1 - x0) * scale, (y1 - y0) * (1.3 if arch == 'bleed' else 0.96))
+        place(img, pr, x0 + (x1 - x0) * p['product_x'], (y0 + y1) / 2, shadow=arch != 'bleed')
+    if p['field'] and arch not in ('split', 'bleed'):
         fy = H * p['field_y']
         multiply_block(img, (0, fy, W * p['field_w'], fy + H * p['field_h']), accent)
     d = ImageDraw.Draw(img)
@@ -188,8 +254,11 @@ def draw(p, calls, product_rect, brand, spec, product, W, H, ctx):
         if by + u * 1.2 > top_end + room:
             break
         d.rectangle([p['margin'], by, p['margin'] + W * (0.16 + 0.09 * (i % 2)), by + u * 1.2], fill=ink)
+    # each block takes the colour that reads on whatever ended up under it
+    px = img.load()
     for fn, x, y, h in calls:
-        fn(d, x, y, ink)
+        under = px[min(max(int(x + 6), 0), W - 1), min(max(int(y + h / 2), 0), H - 1)]
+        fn(d, x, y, readable(under, [ink, paper, (250, 250, 248), accent]))
     return img
 
 

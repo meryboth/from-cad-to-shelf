@@ -61,7 +61,7 @@
       "format": "portrait",
       "view": "front",
       "colorway": "white",
-      "seed": 3,
+      "seed": 7,
       "tagline": "Play it slow."
     },
     {
@@ -69,24 +69,56 @@
       "format": "story",
       "view": "front",
       "colorway": "signal-orange",
-      "seed": 8,
+      "seed": 14,
       "tagline": "Made to be played."
     },
     {
       "template": "auto",
       "format": "portrait",
       "view": "front",
-      "colorway": "white",
-      "seed": 14,
+      "colorway": "signal-orange",
+      "seed": 21,
       "tagline": "One screen. Two buttons."
+    },
+    {
+      "template": "auto",
+      "format": "square",
+      "view": "front",
+      "colorway": "white",
+      "seed": 28,
+      "tagline": "Play it slow."
     },
     {
       "template": "auto",
       "format": "story",
       "view": "front",
+      "colorway": "white",
+      "seed": 35,
+      "tagline": "Made to be played."
+    },
+    {
+      "template": "auto",
+      "format": "portrait",
+      "view": "front",
       "colorway": "signal-orange",
-      "seed": 21,
+      "seed": 42,
+      "tagline": "One screen. Two buttons."
+    },
+    {
+      "template": "auto",
+      "format": "square",
+      "view": "front",
+      "colorway": "signal-orange",
+      "seed": 49,
       "tagline": "Play it slow."
+    },
+    {
+      "template": "auto",
+      "format": "portrait",
+      "view": "front",
+      "colorway": "white",
+      "seed": 56,
+      "tagline": "Made to be played."
     }
   ],
   "seed": 11
