@@ -55,39 +55,39 @@
       "view2": "right",
       "colorway": "white",
       "tagline": "Play it slow."
-    }
-  ],
-  "seed": 11,
-  "shots": [
-    {
-      "framing": "held",
-      "scene": "held",
-      "colorway": "signal-orange",
-      "seed": 7
     },
     {
-      "framing": "held",
-      "scene": "held",
+      "template": "auto",
+      "format": "portrait",
+      "view": "front",
       "colorway": "white",
-      "seed": 41
+      "seed": 3,
+      "tagline": "Play it slow."
     },
     {
-      "framing": "held-close",
-      "scene": "held",
+      "template": "auto",
+      "format": "story",
+      "view": "front",
       "colorway": "signal-orange",
-      "seed": 52
+      "seed": 8,
+      "tagline": "Made to be played."
+    },
+    {
+      "template": "auto",
+      "format": "portrait",
+      "view": "front",
+      "colorway": "white",
+      "seed": 14,
+      "tagline": "One screen. Two buttons."
+    },
+    {
+      "template": "auto",
+      "format": "story",
+      "view": "front",
+      "colorway": "signal-orange",
+      "seed": 21,
+      "tagline": "Play it slow."
     }
   ],
-  "framings": {
-    "held": {
-      "views": "held=0,18",
-      "fill": 0.62,
-      "format": "portrait"
-    },
-    "held-close": {
-      "views": "held=-20,10",
-      "fill": 0.74,
-      "format": "square"
-    }
-  }
+  "seed": 11
 }

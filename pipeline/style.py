@@ -164,7 +164,7 @@ def write(name, refs, product, fonts_src, colors, light, comp, type_):
     formats = {'poster': ['portrait', 'story'], 'spread': ['landscape'], 'specsheet': ['sheet']}
     views = {'poster': 'front', 'spread': 'left', 'specsheet': 'front'}
     pieces = []
-    for t in comp['templates']:
+    for t in comp['templates'][:2]:  # the two templates the references lean to, as fixed layouts
         for i, fmt in enumerate(formats[t]):
             cw = colorways[i % len(colorways)]
             piece = {'template': t, 'format': fmt, 'view': views[t], 'colorway': cw,
@@ -172,6 +172,11 @@ def write(name, refs, product, fonts_src, colors, light, comp, type_):
             if t == 'specsheet':
                 piece['view2'] = 'right'
             pieces.append(piece)
+    # and a set of sampled ones: same inputs, a different composition each seed
+    for i, seed in enumerate((3, 8, 14, 21, 29, 33)):
+        pieces.append({'template': 'auto', 'format': ['portrait', 'story', 'portrait'][i % 3], 'view': 'front',
+                       'colorway': colorways[i % len(colorways)], 'seed': seed,
+                       'tagline': brand['copy']['taglines'][i % 3]})
     plan = {'name': f'{name} campaign', 'product': product, 'brand': f'brands/{name}', 'backend': 'local-sdxl',
             'scene': 'studio-ref', 'seed': 11, 'pieces': pieces}
     json.dump(plan, open(os.path.join(ROOT, 'campaigns', f'{name}.json'), 'w', encoding='utf-8'), indent=2)
