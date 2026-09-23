@@ -38,6 +38,18 @@ whatever is already there, regenerates a photo with a new seed when the routing 
 
 ![The ComfyUI graph](docs/img/comfy-graph.jpg)
 
+## What each guard is worth
+
+The same view, the same seed, with parts of the pipeline turned off (`py tools/ablation.py products/lumen runs/lumen/passes front white`):
+
+| Variant | Colour ΔE | Protected parts ΔE | Worst part vs spec | Verdict | What the image shows |
+|---|---|---|---|---|---|
+| the pipeline as it ships | 0.5 | 0.1 | 7.0 | publish | the product, as designed |
+| ControlNet at half strength | 2.1 | 0.1 | 7.0 | publish | invented buttons, a different grille, text that is not there |
+| no colour, tone or detail put back | 0.5 | 8.6 | 5.6 | review | the screen art is gone and letters appear on the d-pad |
+
+![The three variants](docs/img/ablation.jpg)
+
 ## Consistency
 
 Every view is generated on its own, so a model is free to invent a different dial each time. Three things stop it, and
